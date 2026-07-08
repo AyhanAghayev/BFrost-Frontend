@@ -1,23 +1,5 @@
 import { api } from "./client";
-
-export interface User {
-  id: string;
-  username: string;
-  email?: string;
-  displayName: string;
-  avatarUrl: string;
-  backgroundUrl: string | null;
-  bio: string;
-  university: string;
-  department: string;
-  joinedAt: string;
-  followerCount: number;
-  followingCount: number;
-  clubCount: number;
-  isFollowing: boolean;
-  isVerified: boolean;
-  role: string;
-}
+import type { User } from "../types";
 
 export interface AuthResponse {
   accessToken: string;
