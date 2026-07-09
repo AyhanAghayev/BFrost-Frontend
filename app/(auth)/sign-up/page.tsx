@@ -81,14 +81,14 @@ export default function SignUpPage() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setLoading(true);
     try {
-      const result = await register({
+      await register({
         username: form.username,
         email: form.email,
         password: form.password,
         displayName: form.fullName,
       });
-      const user = await getMe(result.accessToken);
-      setAuth(user, result.accessToken);
+      const user = await getMe();
+      setAuth(user);
       router.push("/discover");
     } catch (err: unknown) {
       setErrors((e) => ({
