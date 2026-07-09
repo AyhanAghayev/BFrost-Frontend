@@ -277,6 +277,239 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-      </div>
+
+      <section className="py-24 px-6 lg:px-12" style={{ backgroundColor: "#F8FAFC" }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-12 gap-4">
+            <div>
+              <span
+                className="text-xs font-bold uppercase tracking-[0.15em] mb-3 block"
+                style={{ color: "#2E5BFF" }}
+              >
+                {MOCK_CLUBS.length} clubs and counting
+              </span>
+              <h2
+                className="text-primary"
+                style={{ fontFamily: "var(--font-manrope)", fontSize: "clamp(26px, 3vw, 36px)", fontWeight: 800, letterSpacing: "-0.02em" }}
+              >
+                Something for every student.
+              </h2>
+              <p className="mt-2 text-sm" style={{ color: "#44474e", maxWidth: 480 }}>
+                From robotics to volunteering, BFrost hosts every student organization — and more join each semester.
+              </p>
+            </div>
+            <Link
+              href="/clubs"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold shrink-0 hover:opacity-80 transition-opacity"
+              style={{ color: "#2E5BFF" }}
+            >
+              Browse all clubs
+              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sortedClubs.map((club) => {
+              const meta = CATEGORY_META[club.category] ?? { icon: "group", color: "#44474e", bg: "rgba(68,71,78,0.1)" };
+              return (
+                <Link
+                  key={club.id}
+                  href={`/clubs/${club.slug}`}
+                  className="flex flex-col gap-4 p-6 rounded-xl bg-white border hover:shadow-md hover:-translate-y-0.5 transition-all"
+                  style={{ borderColor: "#E2E8F0" }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div
+                      className="w-11 h-11 rounded-xl flex items-center justify-center"
+                      style={{ background: meta.bg }}
+                    >
+                      <span className="material-symbols-outlined text-[22px]" style={{ color: meta.color }}>
+                        {meta.icon}
+                      </span>
+                    </div>
+                    <span
+                      className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                      style={{ background: meta.bg, color: meta.color }}
+                    >
+                      {club.category}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-primary text-sm mb-1" style={{ fontFamily: "var(--font-manrope)" }}>
+                      {club.name}
+                    </h3>
+                    <div className="flex items-center gap-4 text-xs" style={{ color: "#44474e" }}>
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[14px]">group</span>
+                        {club.memberCount.toLocaleString()} members
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[14px]">event</span>
+                        {club.eventCount ?? 0} events
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-20 px-6 lg:px-12">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-10 gap-4">
+            <div>
+              <span
+                className="text-xs font-bold uppercase tracking-[0.15em] mb-3 block"
+                style={{ color: "#2E5BFF" }}
+              >
+                What&apos;s on
+              </span>
+              <h2
+                className="text-primary"
+                style={{ fontFamily: "var(--font-manrope)", fontSize: "clamp(24px, 3vw, 34px)", fontWeight: 800, letterSpacing: "-0.02em" }}
+              >
+                Happening this week.
+              </h2>
+            </div>
+            <Link
+              href="/events"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold shrink-0 hover:opacity-80 transition-opacity"
+              style={{ color: "#2E5BFF" }}
+            >
+              View all events
+              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </Link>
+          </div>
+
+          <div className="flex flex-col gap-4">
+            {upcomingEvents.map((event) => {
+              const fmt = FORMAT_META[event.format] ?? FORMAT_META["in-person"];
+              return (
+                <div
+                  key={event.id}
+                  className="flex items-center gap-5 p-5 rounded-xl border bg-white hover:shadow-sm transition-all"
+                  style={{ borderColor: "#E2E8F0" }}
+                >
+                  <div className="hidden sm:block shrink-0 rounded-xl overflow-hidden" style={{ width: 96, height: 64 }}>
+                    <img
+                      src={event.coverImageUrl ?? "https://picsum.photos/seed/event/96/64"}
+                      alt={event.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        style={{ background: fmt.bg, color: fmt.color }}
+                      >
+                        {fmt.label}
+                      </span>
+                      <span className="text-xs" style={{ color: "#44474e" }}>
+                        {event.clubName}
+                      </span>
+                    </div>
+                    <p className="font-semibold text-sm text-primary truncate" style={{ fontFamily: "var(--font-manrope)" }}>
+                      {event.title}
+                    </p>
+                    <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "#44474e" }}>
+                      <span className="material-symbols-outlined text-[13px]">schedule</span>
+                      {formatEventDate(event.startsAt)}
+                      {event.location && (
+                        <>
+                          <span className="mx-1 opacity-40">·</span>
+                          <span className="material-symbols-outlined text-[13px]">location_on</span>
+                          <span className="truncate max-w-[160px]">{event.location}</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right hidden md:block">
+                    <p className="text-xs font-semibold" style={{ color: "#001B3D" }}>
+                      {event.attendeeCount}
+                    </p>
+                    <p className="text-xs" style={{ color: "#44474e" }}>RSVPs</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="relative overflow-hidden py-28 px-6 lg:px-12"
+        style={{ backgroundColor: "#001B3D" }}
+      >
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: "radial-gradient(ellipse at 50% 120%, rgba(46,91,255,0.2) 0%, transparent 60%)",
+          }}
+        />
+        <div className="relative z-10 max-w-2xl mx-auto text-center flex flex-col items-center gap-8">
+          <h2
+            className="text-white leading-tight"
+            style={{ fontFamily: "var(--font-manrope)", fontSize: "clamp(30px, 4.5vw, 52px)", fontWeight: 800, letterSpacing: "-0.025em" }}
+          >
+            Ready to find
+            <br />
+            <span style={{ color: "#6b96ff" }}>your people?</span>
+          </h2>
+          <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 17, maxWidth: 420 }}>
+            Join BFrost for free and become part of the clubs, events, and
+            conversations that define campus life.
+          </p>
+          <div className="flex flex-wrap gap-3 justify-center">
+            <Link
+              href="/sign-up"
+              className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm text-white transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ backgroundColor: "#2E5BFF" }}
+            >
+              Sign up — it&apos;s free
+              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </Link>
+            <Link
+              href="/sign-in"
+              className="inline-flex items-center px-7 py-3.5 rounded-xl font-semibold text-sm transition-all hover:bg-white/10 active:scale-[0.98]"
+              style={{ color: "rgba(255,255,255,0.75)", border: "1px solid rgba(255,255,255,0.15)" }}
+            >
+              Already have an account
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <footer
+        className="px-6 lg:px-12 py-8"
+        style={{ backgroundColor: "#001830", borderTop: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <span
+            className="font-black text-white tracking-tight"
+            style={{ fontFamily: "var(--font-manrope)", fontSize: 18 }}
+          >
+            BFrost
+          </span>
+          <div className="flex items-center gap-6">
+            {["Privacy", "Terms", "Help"].map((label) => (
+              <a
+                key={label}
+                href="#"
+                className="text-xs hover:text-white/60 transition-colors"
+                style={{ color: "rgba(255,255,255,0.3)" }}
+              >
+                {label}
+              </a>
+            ))}
+          </div>
+          <span className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
+            © 2026 BFrost
+          </span>
+        </div>
+      </footer>
+    </div>
   );
 }
