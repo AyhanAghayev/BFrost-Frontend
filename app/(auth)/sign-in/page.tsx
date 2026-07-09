@@ -32,9 +32,9 @@ export default function SignInPage() {
     setError("");
     setLoading(true);
     try {
-      const result = await login({ email, password });
-      const user = await getMe(result.accessToken);
-      setAuth(user, result.accessToken);
+      await login({ email, password });
+      const user = await getMe();
+      setAuth(user);
       router.push("/discover");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sign in failed. Check your credentials.");

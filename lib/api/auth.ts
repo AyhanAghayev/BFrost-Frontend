@@ -1,12 +1,12 @@
 import { api } from "./client";
-import type { User } from "../types";
+import type { User } from "@/lib/types";
+
+// ── Backend response shapes ───────────────────────────────────────────────────
 
 export interface AuthResponse {
-  accessToken: string;
   userId: string;
   username: string;
   displayName: string;
-  role: string;
 }
 
 export interface ApiUserProfile {
@@ -69,7 +69,7 @@ export async function logout(): Promise<void> {
   return api.post<void>("/api/v1/auth/logout");
 }
 
-export async function getMe(token: string): Promise<User> {
-  const profile = await api.get<ApiUserProfile>("/api/v1/users/me", token);
+export async function getMe(): Promise<User> {
+  const profile = await api.get<ApiUserProfile>("/api/v1/users/me");
   return mapUser(profile);
 }
