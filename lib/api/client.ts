@@ -11,54 +11,33 @@ export class ApiError extends Error {
   }
 }
 
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return useAuthStore.getState().accessToken ?? null;
-}
-
-function storeNewToken(token: string) {
-  if (typeof window === "undefined") return;
-  useAuthStore.getState().setAccessToken(token);
-}
-
 function clearAuthAndRedirect() {
   if (typeof window === "undefined") return;
   useAuthStore.getState().clearAuth();
   window.location.href = "/sign-in";
 }
 
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
-async function tryRefresh(): Promise<string | null> {
+async function tryRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = fetch(`${BASE}/api/v1/auth/refresh`, {
     method: "POST",
     credentials: "include",
   })
-    .then(async (res) => {
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.accessToken as string ?? null;
-    })
-    .catch(() => null)
+    .then((res) => res.ok)
+    .catch(() => false)
     .finally(() => { refreshPromise = null; });
   return refreshPromise;
 }
 
-async function request<T>(
-  path: string,
-  init?: RequestInit,
-  tokenOverride?: string,
-  _retried = false
-): Promise<T> {
-  const token = tokenOverride ?? getToken();
+async function request<T>(path: string, init?: RequestInit, _retried = false): Promise<T> {
   const isForm = init?.body instanceof FormData;
   const headers: Record<string, string> = {
     "Accept": "application/json",
     ...(isForm ? {} : { "Content-Type": "application/json" }),
     ...(init?.headers as Record<string, string>),
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE}${path}`, {
     ...init,
@@ -67,10 +46,8 @@ async function request<T>(
   });
 
   if (res.status === 401 && !_retried && path !== "/api/v1/auth/refresh") {
-    const newToken = await tryRefresh();
-    if (newToken) {
-      storeNewToken(newToken);
-      return request<T>(path, init, newToken, true);
+    if (await tryRefresh()) {
+      return request<T>(path, init, true);
     }
     clearAuthAndRedirect();
     throw new ApiError(401, "Session expired — please sign in again");
@@ -92,7 +69,7 @@ async function request<T>(
 }
 
 export const api = {
-  get: <T>(path: string, tokenOverride?: string) => request<T>(path, undefined, tokenOverride),
+  get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body: body != null ? JSON.stringify(body) : undefined }),
   postForm: <T>(path: string, form: FormData) =>
