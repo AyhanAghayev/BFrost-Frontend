@@ -140,8 +140,155 @@ export default function NetworkGlobe() {
     group.add(edgeLines, studentPoints, clubPoints, hlEdgeLines, hlDotPoints);
     scene.add(group);
 
+    const raycaster = new THREE.Raycaster();
+    (raycaster.params as { Points?: { threshold: number } }).Points = { threshold: 0.18 };
+    const mouse = new THREE.Vector2(-10, -10);
+    let hoveredClubIdx = -1;
+
+    let isDragging   = false;
+    let prevMouse    = { x: 0, y: 0 };
+    let velX         = 0;
+    let velY         = 0;
+    const AUTO_ROT   = 0.0025;
+
+    const onMouseDown = (e: MouseEvent) => {
+      isDragging = true;
+      prevMouse  = { x: e.clientX, y: e.clientY };
+      velX = 0; velY = 0;
+      renderer.domElement.style.cursor = "grabbing";
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        const dx = e.clientX - prevMouse.x;
+        const dy = e.clientY - prevMouse.y;
+        group.rotation.y += dx * 0.008;
+        group.rotation.x += dy * 0.008;
+        velY = dx * 0.008;
+        velX = dy * 0.008;
+        prevMouse = { x: e.clientX, y: e.clientY };
+      } else {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width)  *  2 - 1;
+        mouse.y = ((e.clientY - rect.top)  / rect.height) * -2 + 1;
+      }
+    };
+    const onMouseUp = () => {
+      isDragging = false;
+      renderer.domElement.style.cursor = "grab";
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      isDragging = true;
+      prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      velX = 0; velY = 0;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isDragging || e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - prevMouse.x;
+      const dy = e.touches[0].clientY - prevMouse.y;
+      group.rotation.y += dx * 0.008;
+      group.rotation.x += dy * 0.008;
+      velY = dx * 0.008;
+      velX = dy * 0.008;
+      prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    };
+    const onTouchEnd = () => { isDragging = false; };
+
+    const onResize = () => {
+      const nw = mount.clientWidth, nh = mount.clientHeight;
+      camera.aspect = nw / nh;
+      camera.updateProjectionMatrix();
+      renderer.setSize(nw, nh);
+    };
+
+    renderer.domElement.addEventListener("mousedown",  onMouseDown);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup",   onMouseUp);
+    renderer.domElement.addEventListener("touchstart", onTouchStart, { passive: true });
+    renderer.domElement.addEventListener("touchmove",  onTouchMove,  { passive: true });
+    renderer.domElement.addEventListener("touchend",   onTouchEnd);
+    window.addEventListener("resize",    onResize);
+
+    let frame: number;
+
+    const animate = () => {
+      frame = requestAnimationFrame(animate);
+      const t = Date.now();
+
+      if (!isDragging) {
+        group.rotation.y += velY + AUTO_ROT;
+        group.rotation.x += velX;
+        velX *= 0.92;
+        velY *= 0.92;
+      }
+
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObject(clubPoints);
+      const newHovered = hits.length > 0 ? (hits[0].index ?? -1) : -1;
+
+      if (newHovered !== hoveredClubIdx) {
+        hoveredClubIdx = newHovered;
+        renderer.domElement.style.cursor = (isDragging ? "grabbing" : newHovered >= 0 ? "pointer" : "grab");
+      }
+
+      if (hoveredClubIdx >= 0) {
+        const [cx, cy, cz] = [
+          clubPosArr[hoveredClubIdx * 3],
+          clubPosArr[hoveredClubIdx * 3 + 1],
+          clubPosArr[hoveredClubIdx * 3 + 2],
+        ];
+        hlDotPos[0] = cx; hlDotPos[1] = cy; hlDotPos[2] = cz;
+        hlDotGeo.attributes.position.needsUpdate = true;
+        hlDotMat.opacity = 0.35 + 0.25 * Math.sin(t * 0.005);
+
+        const neighbors = clubNeighborPositions[hoveredClubIdx];
+        neighbors.forEach((p, i) => {
+          hlEdgeData[i * 6]     = cx;   hlEdgeData[i * 6 + 1] = cy;   hlEdgeData[i * 6 + 2] = cz;
+          hlEdgeData[i * 6 + 3] = p[0]; hlEdgeData[i * 6 + 4] = p[1]; hlEdgeData[i * 6 + 5] = p[2];
+        });
+        hlEdgeGeo.attributes.position.needsUpdate = true;
+        hlEdgeMat.opacity = 0.45;
+
+        const localPos  = new THREE.Vector3(cx, cy, cz);
+        const worldPos  = localPos.applyMatrix4(group.matrixWorld);
+        const projected = worldPos.project(camera);
+        const rect      = renderer.domElement.getBoundingClientRect();
+        const sx = (projected.x *  0.5 + 0.5) * rect.width;
+        const sy = (projected.y * -0.5 + 0.5) * rect.height;
+
+        const club = MOCK_CLUBS[hoveredClubIdx];
+        if (club && tooltip) {
+          tooltip.style.transform   = `translate(${sx + 16}px, ${sy - 44}px)`;
+          tooltip.style.opacity     = "1";
+          tooltip.style.visibility  = "visible";
+          tooltip.innerHTML = `
+            <span style="font-weight:700;font-size:12px;color:#fff;display:block;margin-bottom:2px">${club.name}</span>
+            <span style="font-size:11px;color:rgba(255,255,255,0.6)">${club.memberCount.toLocaleString()} members · ${club.category}</span>
+          `;
+        }
+      } else {
+        hlDotMat.opacity  = 0;
+        hlEdgeMat.opacity = 0;
+        if (tooltip) {
+          tooltip.style.opacity    = "0";
+          tooltip.style.visibility = "hidden";
+        }
+      }
+
+      renderer.render(scene, camera);
+    };
+    animate();
+
     return () => {
-      scene.remove(group);
+      cancelAnimationFrame(frame);
+      renderer.domElement.removeEventListener("mousedown",  onMouseDown);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup",   onMouseUp);
+      renderer.domElement.removeEventListener("touchstart", onTouchStart);
+      renderer.domElement.removeEventListener("touchmove",  onTouchMove);
+      renderer.domElement.removeEventListener("touchend",   onTouchEnd);
+      window.removeEventListener("resize",    onResize);
       [clubGeo, studentGeo, edgeGeo, hlEdgeGeo, hlDotGeo].forEach(g => g.dispose());
       [clubMat, studentMat, edgeMat, hlEdgeMat, hlDotMat].forEach(m => m.dispose());
       renderer.dispose();
