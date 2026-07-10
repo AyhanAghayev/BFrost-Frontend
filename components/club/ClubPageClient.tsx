@@ -18,6 +18,304 @@ interface Props {
   slug: string;
 }
 
+export default function ClubPageClient({ slug }: Props) {
+  const [club, setClub] = useState<Club | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [events, setEvents] = useState<ClubEvent[]>([]);
+  const [articles] = useState<WikiArticle[]>([]);
+  const [featuredArticle] = useState<WikiArticle | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabType>("feed");
+  const [joined, setJoined] = useState(false);
+  const [requested, setRequested] = useState(false);
+  const [memberCount, setMemberCount] = useState(0);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const { currentUser } = useAuthStore();
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      getClub(slug),
+      getClubPosts(slug),
+      getClubEvents(slug),
+    ])
+      .then(([clubData, postsPage, eventsData]) => {
+        setClub(clubData);
+        setJoined(clubData.isMember);
+        setRequested(clubData.hasPendingRequest ?? false);
+        setMemberCount(clubData.memberCount);
+        setPosts(postsPage.items);
+        setEvents(eventsData);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [slug]);
+
+  if (loading || !club) {
+    return (
+      <main className="flex-1 min-w-0 px-margin-mobile md:px-gutter py-gutter pb-20 lg:pb-gutter">
+        <div className="bg-white border border-border-subtle rounded-xl overflow-hidden mb-gutter animate-pulse">
+          <div className="h-48 bg-surface-container" />
+          <div className="p-gutter">
+            <div className="h-6 bg-surface-container rounded w-48 mb-3" />
+            <div className="h-4 bg-surface-container rounded mb-2" />
+            <div className="h-4 bg-surface-container rounded w-3/4" />
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const canManage =
+    club.currentUserRole === "owner" || club.currentUserRole === "moderator";
+
+  async function handleJoinToggle() {
+    if (!club) return;
+    setJoinError(null);
+
+    if (joined) {
+      setJoined(false);
+      setMemberCount((prev) => prev - 1);
+      try {
+        await leaveClub(club.id);
+      } catch (err) {
+        setJoined(true);
+        setMemberCount((prev) => prev + 1);
+        setJoinError(err instanceof Error ? err.message : "Failed to leave");
+      }
+      return;}
+
+    try {
+      const result = await joinClub(club.id);
+      if (result === "JOINED") {
+        setJoined(true);
+        setMemberCount((prev) => prev + 1);
+      } else {
+        setRequested(true);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to join";
+      if (/pending/i.test(msg)) setRequested(true);
+      else setJoinError(msg);
+    }}
+
+  return (
+    <main className="flex-1 min-w-0 px-margin-mobile md:px-gutter py-gutter pb-20 lg:pb-gutter">
+      {club.status === "PENDING" && (
+        <div className="mb-gutter flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="material-symbols-outlined text-amber-600 text-[20px]">hourglass_top</span>
+          <div>
+            <p className="font-label-md text-label-md text-amber-800">Waiting for admin approval</p>
+            <p className="text-sm text-amber-700">
+              Your club is only visible to you until an admin approves it. You&apos;ll be notified when it goes live.
+            </p>
+          </div>
+        </div>)}
+      <section className="bg-white border border-border-subtle rounded-xl overflow-hidden mb-gutter">
+        <div className="h-48 w-full bg-surface-container">
+          <img
+            src={club.coverImageUrl}
+            alt={club.name}
+            className="w-full h-full object-cover"/>
+        </div>
+        <div className="px-4 md:px-gutter pb-gutter relative">
+          <div className="flex justify-between items-end -mt-8 md:-mt-10">
+            <div className="bg-white p-1 rounded-xl shadow-sm border border-border-subtle">
+              {club.logoUrl ? (
+                <img
+                  src={club.logoUrl}
+                  alt={club.name}
+                  className="w-16 h-16 md:w-24 md:h-24 rounded-lg object-cover"/>) : (
+                <div className="w-16 h-16 md:w-24 md:h-24 rounded-lg bg-primary flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-[32px] md:text-[48px]">
+                    hub
+                  </span>
+                </div>)}
+            </div>
+            <div className="flex flex-col items-end gap-1.5 mb-2">
+              <div className="flex gap-2">
+                {canManage ? (
+                  <>
+                    <Link
+                      href={`/clubs/${club.slug}/manage/events`}
+                      className="bg-primary text-white rounded-lg px-3 md:px-4 py-2.5 font-label-md text-label-md flex items-center gap-1.5 hover:opacity-90 transition-opacity"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">event</span>
+                      <span className="hidden sm:inline">Manage events</span>
+                    </Link>
+                    <Link
+                      href={`/clubs/${club.slug}/settings`}
+                      className="bg-surface-container-high text-on-surface-variant rounded-lg px-3 py-2.5 font-label-md text-label-md flex items-center gap-2 hover:bg-surface-container-highest transition-colors border border-border-subtle"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">settings</span>
+                    </Link>
+                  </>) : joined ? (
+                  <button
+                    onClick={handleJoinToggle}
+                    className="border border-border-subtle text-on-surface-variant rounded-lg px-4 py-2.5 font-label-md text-label-md flex items-center gap-2 hover:bg-surface-container transition-colors">
+                    <span
+                      className="material-symbols-outlined text-[18px] text-primary"
+                      style={{ fontVariationSettings: "'FILL' 1" }}>
+                      check_circle
+                    </span>
+                    <span className="hidden sm:inline">Member</span>
+                  </button>) : requested ? (
+                  <div className="border border-amber-200 bg-amber-50 text-amber-700 rounded-lg px-4 py-2.5 font-label-md text-label-md flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px]">
+                      schedule
+                    </span>
+                    <span>Request pending</span>
+                  </div>) : (
+                  <button
+                    onClick={handleJoinToggle}
+                    className="bg-primary text-white rounded-lg px-4 py-2.5 font-label-md text-label-md hover:opacity-90 transition-opacity">
+                    {club.isPublic ? "Join" : "Request to join"}
+                  </button>
+                )}
+              </div>
+              {joinError && (
+                <p className="text-sm text-error text-right max-w-xs">{joinError}</p>
+              )}
+            </div>
+          </div>
+          <div className="mt-3 md:mt-stack-md">
+            <div className="flex items-center gap-stack-sm flex-wrap">
+              <h1 className="font-headline-lg text-headline-lg text-primary">
+                {club.name}
+              </h1>
+              {club.currentUserRole === "owner" && (
+                <span className="bg-primary text-white text-[10px] uppercase tracking-widest px-2 py-0.5 rounded font-bold">
+                  Owner View
+                </span>)}
+              {club.currentUserRole === "moderator" && (
+                <span className="bg-action-blue text-white text-[10px] uppercase tracking-widest px-2 py-0.5 rounded font-bold">
+                  Moderator
+                </span>)}
+            </div>
+            <p className="mt-2 text-on-surface-variant leading-relaxed max-w-2xl">
+              {club.description}
+            </p>
+            <div className="flex gap-gutter mt-4">
+              <div>
+                <div className="font-bold text-primary">
+                  {formatCount(memberCount)}
+                </div>
+                <div className="text-label-sm text-on-surface-variant uppercase">
+                  Members
+                </div>
+              </div>
+              <div>
+                <div className="font-bold text-primary">
+                  {formatCount(club.eventCount)}
+                </div>
+                <div className="text-label-sm text-on-surface-variant uppercase">
+                  Events
+                </div>
+              </div>
+              <div>
+                <div className="font-bold text-primary">
+                  {formatCount(club.articleCount)}
+                </div>
+                <div className="text-label-sm text-on-surface-variant uppercase">
+                  Articles
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-border-subtle flex px-1 md:px-gutter overflow-x-auto scrollbar-hide">
+          {(["feed", "resources", "events", "directory"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={cn(
+                "px-6 py-4 font-label-md text-label-md whitespace-nowrap capitalize transition-colors",
+                tab === t
+                  ? "text-primary border-b-2 border-primary"
+                  : "text-on-surface-variant hover:text-primary")}>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+      </section>
+      {tab === "feed" && (
+        <FeedTab
+          club={club}
+          posts={posts}
+          featuredArticle={featuredArticle}
+          events={events}
+          currentUser={currentUser}
+          canPost={joined}
+          onTabChange={setTab}
+          onPostCreated={(p) => setPosts((prev) => [p, ...prev])}/>)}
+      {tab === "resources" && <ResourcesTab articles={articles} />}
+      {tab === "events" && (
+        <div className="flex flex-col gap-gutter">
+          {canManage && (
+            <div className="flex justify-end">
+              <Link
+                href={`/clubs/${club.slug}/manage/events`}
+                className="inline-flex items-center gap-1.5 bg-primary text-white px-4 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity">
+                <span className="material-symbols-outlined text-[18px]">edit_calendar</span>
+                Manage events
+              </Link>
+            </div>)}
+          <EventsTab events={events} />
+        </div>
+      )}
+      {tab === "directory" && <DirectoryTab club={club} />}
+    </main>
+  );}
+function FeedTab({
+  club,
+  posts,
+  featuredArticle,
+  events,
+  currentUser,
+  canPost,
+  onTabChange,
+  onPostCreated,}: {
+  club: Club;
+  posts: Post[];
+  featuredArticle: WikiArticle | undefined;
+  events: ClubEvent[];
+  currentUser: User | null;
+  canPost: boolean;
+  onTabChange: (tab: TabType) => void;
+  onPostCreated: (post: Post) => void;
+}) {return (
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+      <div className="md:col-span-8 flex flex-col gap-gutter">
+        {canPost ? (
+          <ClubPostCreator
+            currentUser={currentUser}
+            clubId={club.id}
+            onPostCreated={onPostCreated}/>) : (
+          <div className="bg-white border border-border-subtle rounded-xl p-stack-md text-center text-sm text-on-surface-variant">
+            Join this club to post in the feed.
+          </div>)}
+        {posts.length > 0 ? (
+          posts.map((post) => <PostCard key={post.id} post={post} />)
+        ) : (
+          <div className="bg-white border border-border-subtle rounded-xl p-gutter text-center text-on-surface-variant">
+            No posts yet. Be the first to share something!
+          </div>
+        )}
+      </div>
+      <aside className="hidden md:flex md:col-span-4 flex-col gap-gutter">
+        {featuredArticle && <WikiSnippetCard article={featuredArticle} />}
+        <ClubEventsCard
+          events={events.slice(0, 2)}
+          onViewAll={() => onTabChange("events")}/>
+        {(club.currentUserRole === "owner" ||
+          club.currentUserRole === "moderator") &&
+          club.moderationStats && (
+            <ModerationStatsCard
+              stats={club.moderationStats}
+              clubId={club.slug}/>
+          )}
+      </aside>
+    </div>);}
 function ClubPostCreator({
   currentUser,
   clubId,
@@ -531,69 +829,6 @@ function DirectoryTab({ club }: { club: Club }) {
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-function FeedTab({
-  club,
-  posts,
-  featuredArticle,
-  events,
-  currentUser,
-  canPost,
-  onTabChange,
-  onPostCreated,
-}: {
-  club: Club;
-  posts: Post[];
-  featuredArticle: WikiArticle | undefined;
-  events: ClubEvent[];
-  currentUser: User | null;
-  canPost: boolean;
-  onTabChange: (tab: TabType) => void;
-  onPostCreated: (post: Post) => void;
-}) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter">
-      {/* Left column */}
-      <div className="md:col-span-8 flex flex-col gap-gutter">
-        {canPost ? (
-          <ClubPostCreator
-            currentUser={currentUser}
-            clubId={club.id}
-            onPostCreated={onPostCreated}
-          />
-        ) : (
-          <div className="bg-white border border-border-subtle rounded-xl p-stack-md text-center text-sm text-on-surface-variant">
-            Join this club to post in the feed.
-          </div>
-        )}
-        {posts.length > 0 ? (
-          posts.map((post) => <PostCard key={post.id} post={post} />)
-        ) : (
-          <div className="bg-white border border-border-subtle rounded-xl p-gutter text-center text-on-surface-variant">
-            No posts yet. Be the first to share something!
-          </div>
-        )}
-      </div>
-
-      {/* Right sidebar */}
-      <aside className="hidden md:flex md:col-span-4 flex-col gap-gutter">
-        {featuredArticle && <WikiSnippetCard article={featuredArticle} />}
-        <ClubEventsCard
-          events={events.slice(0, 2)}
-          onViewAll={() => onTabChange("events")}
-        />
-        {(club.currentUserRole === "owner" ||
-          club.currentUserRole === "moderator") &&
-          club.moderationStats && (
-            <ModerationStatsCard
-              stats={club.moderationStats}
-              clubId={club.slug}
-            />
-          )}
-      </aside>
     </div>
   );
 }
