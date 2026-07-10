@@ -534,3 +534,66 @@ function DirectoryTab({ club }: { club: Club }) {
     </div>
   );
 }
+
+function FeedTab({
+  club,
+  posts,
+  featuredArticle,
+  events,
+  currentUser,
+  canPost,
+  onTabChange,
+  onPostCreated,
+}: {
+  club: Club;
+  posts: Post[];
+  featuredArticle: WikiArticle | undefined;
+  events: ClubEvent[];
+  currentUser: User | null;
+  canPost: boolean;
+  onTabChange: (tab: TabType) => void;
+  onPostCreated: (post: Post) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+      {/* Left column */}
+      <div className="md:col-span-8 flex flex-col gap-gutter">
+        {canPost ? (
+          <ClubPostCreator
+            currentUser={currentUser}
+            clubId={club.id}
+            onPostCreated={onPostCreated}
+          />
+        ) : (
+          <div className="bg-white border border-border-subtle rounded-xl p-stack-md text-center text-sm text-on-surface-variant">
+            Join this club to post in the feed.
+          </div>
+        )}
+        {posts.length > 0 ? (
+          posts.map((post) => <PostCard key={post.id} post={post} />)
+        ) : (
+          <div className="bg-white border border-border-subtle rounded-xl p-gutter text-center text-on-surface-variant">
+            No posts yet. Be the first to share something!
+          </div>
+        )}
+      </div>
+
+      {/* Right sidebar */}
+      <aside className="hidden md:flex md:col-span-4 flex-col gap-gutter">
+        {featuredArticle && <WikiSnippetCard article={featuredArticle} />}
+        <ClubEventsCard
+          events={events.slice(0, 2)}
+          onViewAll={() => onTabChange("events")}
+        />
+        {(club.currentUserRole === "owner" ||
+          club.currentUserRole === "moderator") &&
+          club.moderationStats && (
+            <ModerationStatsCard
+              stats={club.moderationStats}
+              clubId={club.slug}
+            />
+          )}
+      </aside>
+    </div>
+  );
+}
