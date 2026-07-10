@@ -251,8 +251,243 @@ export default function PostDetailClient({ postId }: Props) {
               </div>
             </div>
           </article>
+
+          <section className="bg-white rounded-xl border border-border-subtle p-gutter shadow-sm">
+            <h2 className="font-headline-md text-headline-md text-primary mb-gutter">
+              Discussion
+            </h2>
+
+            {currentUser && (
+              <div className="flex gap-stack-md mb-stack-lg">
+                <img
+                  src={currentUser.avatarUrl}
+                  alt={currentUser.displayName}
+                  className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                />
+                <div className="flex-1 space-y-stack-sm">
+                  <textarea
+                    value={commentBody}
+                    onChange={(e) => setCommentBody(e.target.value)}
+                    placeholder="Add to the discussion..."
+                    className="w-full bg-surface-container-low border-none rounded-xl p-stack-md focus:ring-2 focus:ring-action-blue text-body-md min-h-[100px] resize-none"
+                  />
+                  <div className="flex justify-end gap-stack-sm">
+                    <button
+                      onClick={() => setCommentBody("")}
+                      className="px-stack-md py-2 text-label-md text-action-blue font-bold hover:bg-surface-container-low rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={submitComment}
+                      disabled={!commentBody.trim()}
+                      className="px-gutter py-2 bg-primary text-white font-label-md rounded-lg hover:opacity-90 transition-opacity disabled:opacity-40"
+                    >
+                      Post Comment
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-stack-lg">
+              {comments.length === 0 ? (
+                <p className="text-on-surface-variant text-center py-4">
+                  No comments yet. Start the discussion!
+                </p>
+              ) : (
+                comments.map((c) => (
+                  <CommentItem
+                    key={c.id}
+                    comment={c}
+                    currentUser={currentUser}
+                  />
+                ))
+              )}
+            </div>
+
+            {comments.length > 5 && (
+              <button className="w-full mt-stack-lg py-3 text-label-md text-action-blue font-bold border border-action-blue rounded-xl hover:bg-action-blue/5 transition-colors">
+                View more comments
+              </button>
+            )}
+          </section>
         </div>
+
+        <aside className="hidden lg:flex flex-col gap-gutter w-80 flex-shrink-0">
+
+          <div className="bg-primary-container rounded-xl p-gutter shadow-sm relative overflow-hidden">
+            <div className="relative z-10">
+              <h3 className="font-label-md uppercase tracking-wider text-on-primary-container mb-stack-md">
+                Trending Topics
+              </h3>
+              <ul className="space-y-stack-md">
+                {trendingTopics.map((t, i) => (
+                  <li key={t.id} className="flex items-center justify-between">
+                    <span className="font-label-md text-on-primary-container/90">
+                      {t.tag}
+                    </span>
+                    {i === 0 ? (
+                      <span className="text-label-sm bg-white/10 text-on-primary-container px-2 py-1 rounded">
+                        Hot
+                      </span>
+                    ) : (
+                      <span className="text-label-sm text-on-primary-container/60">
+                        {t.summary}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-3xl" />
+          </div>
+
+          <div className="px-2 flex flex-wrap gap-x-stack-md gap-y-stack-sm">
+            {["Privacy", "Terms", "About"].map((l) => (
+              <a
+                key={l}
+                href="#"
+                className="text-label-sm text-on-surface-variant hover:underline"
+              >
+                {l}
+              </a>
+            ))}
+            <span className="text-label-sm text-on-surface-variant">
+              © 2026 BFrost
+            </span>
+          </div>
+        </aside>
       </div>
     </main>
+  );
+}
+
+/* ─────────────── Comment Item ─────────────── */
+
+function CommentItem({
+  comment,
+  depth = 0,
+  currentUser,
+}: {
+  comment: Comment;
+  depth?: number;
+  currentUser: User | null;
+}) {
+  const [liked, setLiked] = useState(comment.isLiked);
+  const [likeCount, setLikeCount] = useState(comment.likeCount);
+  const [showReply, setShowReply] = useState(false);
+  const [replyBody, setReplyBody] = useState("");
+
+  function toggleLike() {
+    setLikeCount((p) => (liked ? p - 1 : p + 1));
+    setLiked((p) => !p);
+  }
+
+  return (
+    <div className={cn("flex gap-stack-md", depth > 0 && "ml-stack-lg mt-stack-md")}>
+      <Link href={`/profile/${comment.author.username}`} className="flex-shrink-0">
+        <img
+          src={comment.author.avatarUrl}
+          alt={comment.author.displayName}
+          className={cn(
+            "rounded-full object-cover",
+            depth > 0 ? "w-8 h-8" : "w-10 h-10"
+          )}
+        />
+      </Link>
+      <div className="flex-1 min-w-0">
+        <div
+          className={cn(
+            "p-stack-md rounded-xl",
+            depth > 0 ? "bg-surface-container" : "bg-surface-container-low"
+          )}
+        >
+          <div className="flex justify-between items-center mb-1">
+            <Link
+              href={`/profile/${comment.author.username}`}
+              className="font-label-md text-primary hover:underline"
+            >
+              {comment.author.displayName}
+            </Link>
+            <span className="text-label-sm text-on-surface-variant">
+              {formatRelativeTime(comment.createdAt)}
+            </span>
+          </div>
+          <p className="text-on-surface leading-relaxed">{comment.body}</p>
+        </div>
+
+        <div className="flex gap-gutter mt-1 px-stack-md">
+          {depth === 0 && (
+            <button
+              onClick={() => setShowReply((s) => !s)}
+              className="text-label-sm text-action-blue font-bold"
+            >
+              Reply
+            </button>
+          )}
+          <button
+            onClick={toggleLike}
+            className={cn(
+              "text-label-sm transition-colors",
+              liked ? "text-action-blue font-bold" : "text-on-surface-variant"
+            )}
+          >
+            {liked && likeCount > 0
+              ? `Liked (${formatCount(likeCount)})`
+              : "Like"}
+          </button>
+        </div>
+
+        {showReply && currentUser && depth === 0 && (
+          <div className="flex gap-stack-sm mt-stack-sm ml-stack-sm">
+            <img
+              src={currentUser.avatarUrl}
+              alt={currentUser.displayName}
+              className="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-1"
+            />
+            <div className="flex-1 space-y-stack-sm">
+              <textarea
+                value={replyBody}
+                onChange={(e) => setReplyBody(e.target.value)}
+                placeholder={`Reply to ${comment.author.displayName}…`}
+                rows={2}
+                className="w-full bg-surface-container-low border-none rounded-xl p-2 focus:ring-1 focus:ring-action-blue text-sm resize-none"
+              />
+              <div className="flex justify-end gap-stack-sm">
+                <button
+                  onClick={() => {
+                    setShowReply(false);
+                    setReplyBody("");
+                  }}
+                  className="px-3 py-1.5 text-label-sm text-action-blue font-bold hover:bg-surface-container-low rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowReply(false);
+                    setReplyBody("");
+                  }}
+                  disabled={!replyBody.trim()}
+                  className="px-3 py-1.5 bg-primary text-white text-label-sm rounded-lg hover:opacity-90 disabled:opacity-40"
+                >
+                  Reply
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {comment.replies?.map((reply) => (
+          <CommentItem
+            key={reply.id}
+            comment={reply}
+            depth={depth + 1}
+            currentUser={currentUser}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
