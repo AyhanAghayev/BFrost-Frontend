@@ -276,3 +276,261 @@ function ClubEventsCard({
     </section>
   );
 }
+
+function ModerationStatsCard({
+  stats,
+  clubId,
+}: {
+  stats: { pendingRequests: number; openReports: number };
+  clubId: string;
+}) {
+  return (
+    <section className="bg-primary rounded-xl p-stack-md">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="material-symbols-outlined text-white text-[20px]">
+          shield
+        </span>
+        <h3 className="font-label-md text-label-md uppercase tracking-wider text-white">
+          Network Oversight
+        </h3>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="bg-white/10 rounded-lg p-3 text-center">
+          <div className="text-2xl font-bold text-white">
+            {stats.pendingRequests}
+          </div>
+          <div className="text-[10px] text-white/70 uppercase tracking-wider mt-1">
+            Requests
+          </div>
+        </div>
+        <div className="bg-white/10 rounded-lg p-3 text-center">
+          <div className="text-2xl font-bold text-white">
+            {stats.openReports}
+          </div>
+          <div className="text-[10px] text-white/70 uppercase tracking-wider mt-1">
+            Reports
+          </div>
+        </div>
+      </div>
+      <Link
+        href={`/clubs/${clubId}/settings`}
+        className="block w-full text-center bg-white/20 hover:bg-white/30 text-white rounded-lg py-2.5 font-label-md text-label-md transition-colors"
+      >
+        Admin Dashboard
+      </Link>
+    </section>
+  );
+}
+
+function ResourcesTab({ articles }: { articles: WikiArticle[] }) {
+  if (articles.length === 0) {
+    return (
+      <div className="bg-white border border-border-subtle rounded-xl p-gutter text-center text-on-surface-variant">
+        No articles yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-gutter">
+      {articles.map((article) => (
+        <article
+          key={article.id}
+          className="bg-white border border-border-subtle rounded-xl p-gutter hover:shadow-sm transition-shadow cursor-pointer"
+        >
+          <div className="flex justify-between items-start gap-4">
+            <div className="flex-1 min-w-0">
+              <h2 className="font-headline-md text-headline-md text-primary mb-2">
+                {article.title}
+              </h2>
+              <p className="text-on-surface-variant leading-relaxed line-clamp-3 mb-4">
+                {article.summary}
+              </p>
+              <div className="flex items-center gap-3 text-label-sm text-on-surface-variant">
+                <img
+                  src={article.author.avatarUrl}
+                  alt={article.author.displayName}
+                  className="w-6 h-6 rounded-full object-cover"
+                />
+                <span>{article.author.displayName}</span>
+                <span>•</span>
+                <span>Updated {formatRelativeTime(article.updatedAt)}</span>
+              </div>
+            </div>
+            {article.isFeatured && (
+              <span className="flex-shrink-0 bg-primary text-white text-[10px] uppercase tracking-widest px-2 py-1 rounded font-bold">
+                Featured
+              </span>
+            )}
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+const FORMAT_ICON: Record<string, string> = {
+  "in-person": "place",
+  online: "videocam",
+  hybrid: "devices",
+};
+
+function EventsTab({ events }: { events: ClubEvent[] }) {
+  if (events.length === 0) {
+    return (
+      <div className="bg-white border border-border-subtle rounded-xl p-gutter text-center text-on-surface-variant">
+        No events scheduled for this club.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-gutter">
+      {events.map((event) => {
+        const d = new Date(event.startsAt);
+        const month = d.toLocaleString("en-US", { month: "short" }).toUpperCase();
+        const day = String(d.getDate());
+        const time = d.toLocaleString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+
+        return (
+          <article
+            key={event.id}
+            className="bg-white border border-border-subtle rounded-xl p-gutter hover:shadow-sm transition-shadow cursor-pointer"
+          >
+            <div className="flex gap-gutter">
+              <div className="flex-shrink-0 w-16 text-center bg-primary/10 rounded-xl py-3">
+                <div className="text-[10px] font-bold uppercase text-primary">
+                  {month}
+                </div>
+                <div className="text-2xl font-bold text-primary leading-tight">
+                  {day}
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-headline-md text-headline-md text-primary mb-1">
+                  {event.title}
+                </h2>
+                <p className="text-on-surface-variant leading-relaxed line-clamp-2 mb-3">
+                  {event.description}
+                </p>
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-label-sm text-on-surface-variant">
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">
+                      {FORMAT_ICON[event.format] ?? "place"}
+                    </span>
+                    {event.location}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">
+                      schedule
+                    </span>
+                    {time}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">
+                      group
+                    </span>
+                    {event.attendeeCount} attending
+                  </span>
+                </div>
+              </div>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+const ROLE_META: Record<ApiMember["role"], { label: string; cls: string }> = {
+  OWNER: { label: "Owner", cls: "bg-primary text-white" },
+  MODERATOR: { label: "Moderator", cls: "bg-action-blue text-white" },
+  MEMBER: { label: "Member", cls: "bg-surface-container-high text-on-surface-variant" },
+};
+
+const ROLE_ORDER: Record<ApiMember["role"], number> = { OWNER: 0, MODERATOR: 1, MEMBER: 2 };
+
+function DirectoryTab({ club }: { club: Club }) {
+  const [members, setMembers] = useState<ApiMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    getClubMembers(club.id)
+      .then((m) =>
+        setMembers(
+          [...m].sort(
+            (a, b) =>
+              ROLE_ORDER[a.role] - ROLE_ORDER[b.role] ||
+              a.displayName.localeCompare(b.displayName)
+          )
+        )
+      )
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [club.id]);
+
+  return (
+    <div className="bg-white border border-border-subtle rounded-xl p-gutter">
+      <div className="flex items-baseline justify-between mb-stack-md">
+        <h2 className="font-headline-md text-headline-md text-primary">Members</h2>
+        <span className="text-label-sm text-on-surface-variant">
+          {formatCount(club.memberCount)} total
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="py-12 flex justify-center">
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : error ? (
+        <p className="text-on-surface-variant text-body-sm py-8 text-center">{error}</p>
+      ) : members.length === 0 ? (
+        <p className="text-on-surface-variant text-body-sm py-8 text-center">No members yet.</p>
+      ) : (
+        <div className="flex flex-col divide-y divide-border-subtle">
+          {members.map((m) => {
+            const meta = ROLE_META[m.role];
+            return (
+              <Link
+                key={m.userId}
+                href={`/profile/${m.username}`}
+                className="flex items-center gap-3 py-3 -mx-2 px-2 rounded-lg hover:bg-surface-faint transition-colors"
+              >
+                <img
+                  src={
+                    m.profilePictureUrl ??
+                    `https://api.dicebear.com/9.x/avataaars/svg?seed=${m.username}`
+                  }
+                  alt={m.displayName}
+                  className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <span className="font-label-md text-label-md text-on-surface block truncate">
+                    {m.displayName}
+                  </span>
+                  <span className="text-label-sm text-on-surface-variant truncate">
+                    @{m.username}
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase",
+                    meta.cls
+                  )}
+                >
+                  {meta.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
