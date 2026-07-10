@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { getClub } from "@/lib/api/clubs";
 import type { ClubEvent, Club } from "@/lib/types";
-import { getEvent, getClubEvents } from "@/lib/api/events";
+import { getEvent, rsvpEvent } from "@/lib/api/events";
+import { getClub } from "@/lib/api/clubs";
+import { getClubEvents } from "@/lib/api/events";
 import { defaultEventCoverStyle } from "@/lib/eventCover";
 
 const FORMAT_META: Record<string, { icon: string; label: string; color: string; bg: string }> = {
@@ -30,12 +31,16 @@ export default function EventDetailClient({ eventId }: Props) {
   const [club, setClub] = useState<Club | null>(null);
   const [relatedEvents, setRelatedEvents] = useState<ClubEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [attending, setAttending] = useState(false);
+  const [count, setCount] = useState(0);
 
   useEffect(() => {
     setLoading(true);
     getEvent(eventId)
       .then(async (ev) => {
         setEvent(ev);
+        setAttending(ev.isAttending);
+        setCount(ev.attendeeCount);
         const [clubData, related] = await Promise.all([
           getClub(ev.clubSlug),
           getClubEvents(ev.clubSlug),
@@ -61,6 +66,18 @@ export default function EventDetailClient({ eventId }: Props) {
     );
   }
 
+  function toggleAttend() {
+    const wasAttending = attending;
+    setCount((c) => (wasAttending ? c - 1 : c + 1));
+    setAttending((a) => !a);
+    rsvpEvent(event!.id, wasAttending ? "NOT_ATTENDING" : "ATTENDING").catch(() => {
+      setCount((c) => (wasAttending ? c + 1 : c - 1));
+      setAttending(wasAttending);
+    });
+  }
+
+  const facepile: Array<{ id: string; displayName: string; avatarUrl: string }> = [];
+
   const fmt = FORMAT_META[event.format] ?? FORMAT_META["in-person"];
   const isPast = new Date(event.endsAt) < new Date();
 
@@ -68,7 +85,11 @@ export default function EventDetailClient({ eventId }: Props) {
     <div className="flex-1 min-w-0 min-h-screen bg-surface-faint">
       <div className="w-full aspect-[5/2] md:aspect-[3/1] overflow-hidden bg-surface-container">
         {event.coverImageUrl ? (
-          <img src={event.coverImageUrl} alt={event.title} className="w-full h-full object-cover" />
+          <img
+            src={event.coverImageUrl}
+            alt={event.title}
+            className="w-full h-full object-cover"
+          />
         ) : (
           <div className="w-full h-full" style={defaultEventCoverStyle(event.id)} />
         )}
@@ -108,7 +129,7 @@ export default function EventDetailClient({ eventId }: Props) {
             <span className="font-headline-md text-headline-md text-white leading-tight truncate">
               {event.location.split(",")[0]}
             </span>
-            <span className="text-xs text-white/60 truncate">{event.location.includes(",") ? event.location.split(",").slice(1).join(",").trim() : " "}</span>
+            <span className="text-xs text-white/60 truncate">{event.location.includes(",") ? event.location.split(",").slice(1).join(",").trim() : " "}</span>
           </div>
         </div>
       </div>
@@ -138,15 +159,55 @@ export default function EventDetailClient({ eventId }: Props) {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-stack-md">
                 <div>
                   <p className="font-label-md text-on-surface-variant mb-stack-sm">
-                    {event.attendeeCount.toLocaleString()} {event.attendeeCount === 1 ? "student" : "students"} attending
+                    {count.toLocaleString()} {count === 1 ? "student" : "students"} attending
                   </p>
                   <div className="flex items-center gap-2">
-                    {event.attendeeCount > 0 && (
-                      <span className="text-label-sm text-on-surface-variant">Open to all members</span>
+                    <div className="flex -space-x-2">
+                      {facepile.map((u) => (
+                        <img
+                          key={u.id}
+                          src={u.avatarUrl}
+                          alt={u.displayName}
+                          className="w-8 h-8 rounded-full border-2 border-white object-cover"
+                        />
+                      ))}
+                    </div>
+                    {count > 4 && (
+                      <span className="text-label-sm text-on-surface-variant">+{count - 4} more</span>
                     )}
                   </div>
                 </div>
-                {isPast && (
+
+                {/* RSVP buttons */}
+                {!isPast ? (
+                  <div className="flex gap-stack-sm flex-wrap">
+                    <button
+                      onClick={toggleAttend}
+                      className={cn(
+                        "flex items-center gap-2 px-6 py-2.5 rounded-lg font-label-md text-label-md transition-all active:scale-95",
+                        attending
+                          ? "bg-primary text-white hover:opacity-90"
+                          : "border-2 border-primary text-primary hover:bg-primary/5"
+                      )}
+                    >
+                      <span
+                        className="material-symbols-outlined text-[18px]"
+                        style={attending ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                      >
+                        {attending ? "check_circle" : "add_circle"}
+                      </span>
+                      {attending ? "Going" : "RSVP"}
+                    </button>
+                    {attending && (
+                      <button
+                        onClick={toggleAttend}
+                        className="px-4 py-2.5 rounded-lg font-label-md text-label-md text-on-surface-variant border border-border-subtle hover:bg-surface-container transition-colors"
+                      >
+                        Can't make it
+                      </button>
+                    )}
+                  </div>
+                ) : (
                   <span className="text-sm text-on-surface-variant italic">This event has ended.</span>
                 )}
               </div>
@@ -247,10 +308,21 @@ export default function EventDetailClient({ eventId }: Props) {
                 <div className="flex items-start gap-3">
                   <span className="material-symbols-outlined text-action-blue text-[20px] flex-shrink-0 mt-0.5">group</span>
                   <div>
-                    <p className="text-sm font-semibold text-on-surface">{event.attendeeCount} attending</p>
+                    <p className="text-sm font-semibold text-on-surface">{count} attending</p>
                     <p className="text-xs text-on-surface-variant">Open to all members</p>
                   </div>
                 </div>
+              </div>
+
+              <div className="mt-gutter pt-stack-md border-t border-border-subtle flex gap-2">
+                <button className="flex-1 flex items-center justify-center gap-2 py-2 border border-border-subtle rounded-lg text-label-sm text-on-surface-variant hover:bg-surface-container transition-colors">
+                  <span className="material-symbols-outlined text-[16px]">share</span>
+                  Share
+                </button>
+                <button className="flex-1 flex items-center justify-center gap-2 py-2 border border-border-subtle rounded-lg text-label-sm text-on-surface-variant hover:bg-surface-container transition-colors">
+                  <span className="material-symbols-outlined text-[16px]">calendar_add_on</span>
+                  Add to calendar
+                </button>
               </div>
             </div>
           </aside>
@@ -270,7 +342,11 @@ function RelatedEventCard({ event }: { event: ClubEvent }) {
     >
       <div className="w-16 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-surface-container">
         {event.coverImageUrl ? (
-          <img src={event.coverImageUrl} alt={event.title} className="w-full h-full object-cover" />
+          <img
+            src={event.coverImageUrl}
+            alt={event.title}
+            className="w-full h-full object-cover"
+          />
         ) : (
           <div className="w-full h-full" style={defaultEventCoverStyle(event.id)} />
         )}
