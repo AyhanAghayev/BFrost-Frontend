@@ -7,6 +7,11 @@ import type { ClubEvent, EventFormat } from "@/lib/types";
 import { getMyEventFeed, rsvpEvent } from "@/lib/api/events";
 import { defaultEventCoverStyle } from "@/lib/eventCover";
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
 function fmtMonth3(iso: string) {
   return new Date(iso).toLocaleString("en", { month: "short" });
 }
@@ -41,6 +46,15 @@ type Filter = "all" | EventFormat;
 
 const PAGE_SIZE = 9;
 
+function buildCalendarDays(year: number, month: number): (number | null)[] {
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const days: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) days.push(null);
+  for (let d = 1; d <= daysInMonth; d++) days.push(d);
+  return days;
+}
+
 export default function EventsPageClient() {
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,17 +80,53 @@ export default function EventsPageClient() {
     setPage(1);
   }, [filter]);
 
+  const todayDate = useMemo(() => new Date(), []);
+  const [calYear, setCalYear] = useState(todayDate.getFullYear());
+  const [calMonth, setCalMonth] = useState(todayDate.getMonth());
+
   async function toggleRsvp(id: string) {
     const wasAttending = !!attending[id];
     setAttending((p) => ({ ...p, [id]: !wasAttending }));
     try {
       await rsvpEvent(id, wasAttending ? "NOT_ATTENDING" : "ATTENDING");
-    } 
-    catch {setAttending((p) => ({ ...p, [id]: wasAttending }));}
+    } catch {
+      setAttending((p) => ({ ...p, [id]: wasAttending }));
+    }
   }
   function effectiveCount(e: ClubEvent) {
     return e.attendeeCount + (attending[e.id] ? 1 : 0) - (e.isAttending ? 1 : 0);
   }
+  function prevMonth() {
+    if (calMonth === 0) { setCalMonth(11); setCalYear((y) => y - 1); }
+    else setCalMonth((m) => m - 1);
+  }
+  function nextMonth() {
+    if (calMonth === 11) { setCalMonth(0); setCalYear((y) => y + 1); }
+    else setCalMonth((m) => m + 1);
+  }
+
+  const days = useMemo(() => buildCalendarDays(calYear, calMonth), [calYear, calMonth]);
+
+  const eventDays = useMemo(() => {
+    const set = new Set<number>();
+    events.forEach((e) => {
+      const d = new Date(e.startsAt);
+      if (d.getFullYear() === calYear && d.getMonth() === calMonth) set.add(d.getDate());
+    });
+    return set;
+  }, [events, calYear, calMonth]);
+
+  const calEventMap = useMemo(() => {
+    const map: Record<number, ClubEvent[]> = {};
+    events.forEach((e) => {
+      const d = new Date(e.startsAt);
+      if (d.getFullYear() === calYear && d.getMonth() === calMonth) {
+        const day = d.getDate();
+        (map[day] ??= []).push(e);
+      }
+    });
+    return map;
+  }, [events, calYear, calMonth]);
 
   const [featured, ...rest] = events;
   const filteredRest = rest.filter((e) => filter === "all" || e.format === filter);
@@ -123,12 +173,15 @@ export default function EventsPageClient() {
         </div>
 
         {view !== "list" ? (
-          <div className="bg-white border border-border-subtle rounded-xl p-16 flex flex-col items-center text-center gap-3">
-            <span className="material-symbols-outlined text-on-surface-variant text-[40px] opacity-30">
-              calendar_month
-            </span>
-            <p className="text-on-surface-variant text-body-sm">Calendar view coming soon.</p>
-          </div>
+          <CalendarView
+            days={days}
+            calEventMap={calEventMap}
+            calYear={calYear}
+            calMonth={calMonth}
+            onPrev={prevMonth}
+            onNext={nextMonth}
+            attending={attending}
+          />
         ) : (
         <>
         {featured && (
@@ -332,8 +385,6 @@ export default function EventsPageClient() {
             </div>
           )}
         </div>
-
-        {/* ── Pagination controls ── */}
         {filteredRest.length > PAGE_SIZE && (
           <div className="flex items-center justify-center gap-2 pb-gutter">
             <button
@@ -405,6 +456,16 @@ export default function EventsPageClient() {
             </div>
           )}
         </div>
+
+        <MiniCalendar
+          calYear={calYear}
+          calMonth={calMonth}
+          days={days}
+          eventDays={eventDays}
+          todayDate={todayDate}
+          onPrev={prevMonth}
+          onNext={nextMonth}
+        />
       </aside>
     </div>
   );}
@@ -491,6 +552,184 @@ function EventCard({
             {attending ? "Going" : "RSVP"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniCalendar({
+  calYear,
+  calMonth,
+  days,
+  eventDays,
+  todayDate,
+  onPrev,
+  onNext,
+}: {
+  calYear: number;
+  calMonth: number;
+  days: (number | null)[];
+  eventDays: Set<number>;
+  todayDate: Date;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+  return (
+    <div className="bg-white border border-border-subtle rounded-xl p-gutter">
+      <div className="flex items-center justify-between mb-gutter">
+        <h5 className="font-label-md text-label-md text-on-surface">
+          {MONTH_NAMES[calMonth]} {calYear}
+        </h5>
+        <div className="flex gap-1">
+          <button onClick={onPrev} className="p-1 rounded hover:bg-surface-container transition-colors">
+            <span className="material-symbols-outlined text-outline text-[20px]">chevron_left</span>
+          </button>
+          <button onClick={onNext} className="p-1 rounded hover:bg-surface-container transition-colors">
+            <span className="material-symbols-outlined text-outline text-[20px]">chevron_right</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-0.5 text-center mb-1">
+        {DAY_LABELS.map((d, i) => (
+          <div key={i} className="text-[10px] text-on-surface-variant font-bold uppercase py-1">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-0.5 text-center">
+        {days.map((d, i) => {
+          if (d === null) return <div key={i} />;
+          const today =
+            d === todayDate.getDate() &&
+            calYear === todayDate.getFullYear() &&
+            calMonth === todayDate.getMonth();
+          const hasEvent = eventDays.has(d);
+          return (
+            <div
+              key={i}
+              className={cn(
+                "relative flex flex-col items-center py-1.5 rounded-lg cursor-pointer transition-colors text-sm",
+                today ? "bg-primary text-white font-bold" : "hover:bg-surface-container text-on-surface"
+              )}
+            >
+              {d}
+              {hasEvent && (
+                <span
+                  className={cn(
+                    "absolute bottom-0.5 w-1 h-1 rounded-full",
+                    today ? "bg-white/60" : "bg-action-blue"
+                  )}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CalendarView({
+  days,
+  calEventMap,
+  calYear,
+  calMonth,
+  onPrev,
+  onNext,
+  attending,
+}: {
+  days: (number | null)[];
+  calEventMap: Record<number, ClubEvent[]>;
+  calYear: number;
+  calMonth: number;
+  onPrev: () => void;
+  onNext: () => void;
+  attending: Record<string, boolean>;
+}) {
+  const todayRef = new Date();
+  const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  return (
+    <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-gutter py-stack-md border-b border-border-subtle">
+        <h2 className="font-headline-md text-headline-md text-primary">
+          {MONTH_NAMES[calMonth]} {calYear}
+        </h2>
+        <div className="flex gap-2">
+          <button onClick={onPrev} className="p-2 rounded-lg hover:bg-surface-container transition-colors">
+            <span className="material-symbols-outlined text-on-surface-variant">chevron_left</span>
+          </button>
+          <button onClick={onNext} className="p-2 rounded-lg hover:bg-surface-container transition-colors">
+            <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 border-b border-border-subtle">
+        {DOW.map((d) => (
+          <div
+            key={d}
+            className="py-3 text-center text-[11px] font-bold uppercase tracking-wider text-on-surface-variant border-r last:border-r-0 border-border-subtle"
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 border-l border-border-subtle">
+        {days.map((d, i) => {
+          const today =
+            d !== null &&
+            d === todayRef.getDate() &&
+            calYear === todayRef.getFullYear() &&
+            calMonth === todayRef.getMonth();
+          const dayEvents = d !== null ? (calEventMap[d] ?? []) : [];
+
+          return (
+            <div
+              key={i}
+              className={cn(
+                "border-r border-b border-border-subtle p-2 min-h-[100px]",
+                d === null ? "bg-surface-faint" : ""
+              )}
+            >
+              {d !== null && (
+                <>
+                  <div
+                    className={cn(
+                      "w-7 h-7 rounded-full flex items-center justify-center text-sm mb-1",
+                      today ? "bg-primary text-white font-bold" : "text-on-surface"
+                    )}
+                  >
+                    {d}
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {dayEvents.slice(0, 2).map((e) => (
+                      <div
+                        key={e.id}
+                        className={cn(
+                          "px-1.5 py-0.5 rounded text-[11px] font-semibold truncate",
+                          attending[e.id] ? "bg-emerald-100 text-emerald-800" : "bg-primary/10 text-primary"
+                        )}
+                        title={e.title}
+                      >
+                        {e.title}
+                      </div>
+                    ))}
+                    {dayEvents.length > 2 && (
+                      <div className="text-[10px] text-on-surface-variant px-1">
+                        +{dayEvents.length - 2} more
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
