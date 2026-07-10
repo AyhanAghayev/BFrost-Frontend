@@ -36,13 +36,18 @@ const FORMAT_META: Record<EventFormat, { label: string; cls: string }> = {
   hybrid: { label: "Hybrid", cls: "bg-purple-50 text-purple-700" },
 };
 
+type ViewMode = "list" | "calendar";
 type Filter = "all" | EventFormat;
+
+const PAGE_SIZE = 9;
 
 export default function EventsPageClient() {
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<ViewMode>("list");
   const [filter, setFilter] = useState<Filter>("all");
   const [attending, setAttending] = useState<Record<string, boolean>>({});
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     getMyEventFeed()
@@ -56,6 +61,10 @@ export default function EventsPageClient() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
 
   async function toggleRsvp(id: string) {
     const wasAttending = !!attending[id];
@@ -72,6 +81,8 @@ export default function EventsPageClient() {
   const [featured, ...rest] = events;
   const filteredRest = rest.filter((e) => filter === "all" || e.format === filter);
   const myRsvps = events.filter((e) => attending[e.id]);
+  const totalPages = Math.max(1, Math.ceil(filteredRest.length / PAGE_SIZE));
+  const pagedRest = filteredRest.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   if (loading) {
     return (
@@ -93,7 +104,33 @@ export default function EventsPageClient() {
               {events.length} upcoming events from your clubs
             </p>
           </div>
+          <div className="flex bg-surface-container rounded-lg p-1 self-start sm:self-auto">
+            {(["list", "calendar"] as ViewMode[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={cn(
+                  "px-4 py-2 rounded-md font-label-md text-label-md capitalize transition-colors",
+                  view === v
+                    ? "bg-white shadow-sm text-primary"
+                    : "text-on-surface-variant hover:bg-surface-container-high"
+                )}
+              >
+                {v === "list" ? "List" : "Calendar"}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {view !== "list" ? (
+          <div className="bg-white border border-border-subtle rounded-xl p-16 flex flex-col items-center text-center gap-3">
+            <span className="material-symbols-outlined text-on-surface-variant text-[40px] opacity-30">
+              calendar_month
+            </span>
+            <p className="text-on-surface-variant text-body-sm">Calendar view coming soon.</p>
+          </div>
+        ) : (
+        <>
         {featured && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter">
             <div className="md:col-span-7 relative rounded-xl overflow-hidden group h-[380px] border border-border-subtle">
@@ -274,8 +311,8 @@ export default function EventsPageClient() {
             {filteredRest.length} event{filteredRest.length !== 1 ? "s" : ""}
           </span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-gutter pb-gutter">
-          {filteredRest.map((event) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-gutter">
+          {pagedRest.map((event) => (
             <EventCard
               key={event.id}
               event={event}
@@ -295,6 +332,42 @@ export default function EventsPageClient() {
             </div>
           )}
         </div>
+
+        {/* ── Pagination controls ── */}
+        {filteredRest.length > PAGE_SIZE && (
+          <div className="flex items-center justify-center gap-2 pb-gutter">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="p-2 rounded-lg border border-border-subtle text-on-surface-variant disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                className={cn(
+                  "w-9 h-9 rounded-lg font-label-md text-label-md text-sm transition-colors",
+                  p === page
+                    ? "bg-primary text-white"
+                    : "text-on-surface-variant hover:bg-surface-container"
+                )}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="p-2 rounded-lg border border-border-subtle text-on-surface-variant disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+            </button>
+          </div>
+        )}
+        </>
+        )}
       </div>
       <aside className="hidden xl:flex flex-col gap-gutter w-72 shrink-0">
         <div className="bg-white border border-border-subtle rounded-xl p-gutter">
