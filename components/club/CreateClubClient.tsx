@@ -476,6 +476,92 @@ export default function CreateClubClient() {
               </div>
             </Section>
 
+            {/* Access */}
+            <Section heading="Access">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  { value: true,  icon: "public", title: "Public",  desc: "Anyone can find and join your club." },
+                  { value: false, icon: "lock",   title: "Private", desc: "Members join by invitation or request." },
+                ].map(({ value, icon, title, desc }) => (
+                  <button
+                    key={String(value)}
+                    type="button"
+                    onClick={() => setIsPublic(value)}
+                    className={cn(
+                      "flex items-start gap-3.5 p-4 rounded-xl border-2 text-left transition-all",
+                      isPublic === value
+                        ? "border-action-blue bg-action-blue/5"
+                        : "border-border-subtle bg-surface-faint hover:bg-surface-container",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "material-symbols-outlined text-[22px] mt-0.5 shrink-0",
+                        isPublic === value ? "text-action-blue" : "text-on-surface-variant",
+                      )}
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
+                      {icon}
+                    </span>
+                    <div>
+                      <p className={cn(
+                        "text-body-sm font-semibold mb-0.5",
+                        isPublic === value ? "text-action-blue" : "text-on-surface",
+                      )}>
+                        {title}
+                      </p>
+                      <p className="text-label-sm text-on-surface-variant leading-snug">{desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </Section>
+
+            {/* Global error */}
+            {globalError && (
+              <div className="flex items-center gap-2.5 px-4 py-3 bg-error-container rounded-xl text-body-sm text-on-error-container">
+                <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
+                {globalError}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center justify-between gap-4 pb-10">
+              <Link
+                href="/clubs"
+                className="text-body-sm text-on-surface-variant hover:text-on-surface transition-colors"
+              >
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                disabled={!canSubmit || submitting}
+                className={cn(
+                  "inline-flex items-center gap-2 px-6 py-3 rounded-xl text-body-sm font-semibold transition-all",
+                  canSubmit && !submitting
+                    ? "bg-primary text-on-primary hover:bg-primary/90 active:scale-[0.98] shadow-sm"
+                    : "bg-surface-container text-on-surface-variant cursor-not-allowed",
+                )}
+              >
+                {submitting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin shrink-0" />
+                    Founding…
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className="material-symbols-outlined text-[18px] shrink-0"
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
+                      add_circle
+                    </span>
+                    Found this club
+                  </>
+                )}
+              </button>
+            </div>
+
           </form>
         </div>
       </div>
