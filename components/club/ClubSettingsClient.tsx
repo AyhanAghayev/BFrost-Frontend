@@ -188,6 +188,39 @@ function SettingsForm({
     }
   }
 
+  const [channels, setChannels] = useState<string[]>([]);
+
+  const [newChannel, setNewChannel] = useState("");
+  const [renamingChannel, setRenamingChannel] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
+  function addChannel() {
+    const val = newChannel.trim();
+    if (!val || channels.includes(val)) return;
+    setChannels((p) => [...p, val]);
+    setNewChannel("");
+  }
+
+  function removeChannel(ch: string) {
+    setChannels((p) => p.filter((c) => c !== ch));
+  }
+
+  function startRename(ch: string) {
+    setRenamingChannel(ch);
+    setRenameValue(ch);
+  }
+
+  function commitRename() {
+    const val = renameValue.trim();
+    if (!val || !renamingChannel) {
+      setRenamingChannel(null);
+      return;
+    }
+    setChannels((p) => p.map((c) => (c === renamingChannel ? val : c)));
+    setRenamingChannel(null);
+  }
+
+
   async function handleRequest(requestId: string, action: "approve" | "reject") {
     setActioningId(requestId);
     try {
@@ -766,6 +799,135 @@ function SettingsForm({
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Channels */}
+          {tab === "channels" && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <div className="px-gutter py-stack-md border-b border-border-subtle">
+                <h2 className="font-headline-md text-headline-md text-primary">
+                  Channels
+                </h2>
+              </div>
+              <div className="p-gutter space-y-stack-sm">
+                {channels.length === 0 && (
+                  <p className="text-sm text-on-surface-variant py-8 text-center">
+                    No channels yet. Add one below.
+                  </p>
+                )}
+                {channels.map((ch) => (
+                  <div
+                    key={ch}
+                    className="flex items-center justify-between p-3 bg-surface-faint border border-border-subtle rounded-xl gap-3"
+                  >
+                    {renamingChannel === ch ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={commitRename}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitRename();
+                          if (e.key === "Escape") setRenamingChannel(null);
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-white border border-action-blue rounded-lg text-sm focus:outline-none"
+                      />
+                    ) : (
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="material-symbols-outlined text-on-surface-variant text-[18px]">
+                          tag
+                        </span>
+                        <span className="font-label-md text-on-surface truncate">
+                          {ch}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => startRename(ch)}
+                        className="text-sm text-on-surface-variant hover:text-primary font-label-md transition-colors"
+                      >
+                        Rename
+                      </button>
+                      <span className="text-border-subtle select-none">|</span>
+                      <button
+                        onClick={() => removeChannel(ch)}
+                        className="text-sm text-error hover:opacity-80 font-label-md transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex gap-3 pt-2">
+                  <input
+                    type="text"
+                    placeholder="New channel name"
+                    value={newChannel}
+                    onChange={(e) => setNewChannel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addChannel();
+                    }}
+                    className="flex-1 px-4 py-3 bg-surface-faint border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-action-blue"
+                  />
+                  <button
+                    onClick={addChannel}
+                    disabled={!newChannel.trim()}
+                    className="px-5 py-3 bg-primary text-white rounded-xl font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-40 flex items-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      add
+                    </span>
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Danger Zone */}
+          {tab === "danger" && isOwner && (
+            <div className="bg-white border-2 border-red-200 rounded-xl overflow-hidden">
+              <div className="px-gutter py-stack-md border-b border-red-200 bg-red-50">
+                <h2 className="font-headline-md text-headline-md text-error">
+                  Danger zone
+                </h2>
+                <p className="text-sm text-on-surface-variant mt-1">
+                  These actions are permanent. Only the club owner can perform them.
+                </p>
+              </div>
+              <div className="divide-y divide-red-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-gutter py-5">
+                  <div>
+                    <p className="font-label-md text-on-surface">
+                      Archive club
+                    </p>
+                    <p className="text-sm text-on-surface-variant">
+                      Make the club read-only and hide it from the feed.
+                    </p>
+                  </div>
+                  <button className="flex-shrink-0 px-6 py-2.5 border border-error text-error rounded-xl font-label-md text-label-md hover:bg-red-50 transition-colors">
+                    Archive club
+                  </button>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-gutter py-5">
+                  <div>
+                    <p className="font-label-md text-error">Delete club</p>
+                    <p className="text-sm text-on-surface-variant">
+                      Permanently delete all posts, members, and data. Cannot be
+                      undone.
+                    </p>
+                  </div>
+                  <button className="flex-shrink-0 px-6 py-2.5 bg-error text-white rounded-xl font-label-md text-label-md hover:opacity-90 transition-opacity flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px]">
+                      delete_forever
+                    </span>
+                    Delete club
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
