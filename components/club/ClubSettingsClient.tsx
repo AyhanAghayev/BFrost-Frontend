@@ -126,6 +126,82 @@ function SettingsForm({
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const router = useRouter();
 
+  const [requests, setRequests] = useState<ApiJoinRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(true);
+  const [actioningId, setActioningId] = useState<string | null>(null);
+
+  const [members, setMembers] = useState<ApiMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [memberBusyId, setMemberBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    getClubRequests(club.id)
+      .then(setRequests)
+      .catch(() => setRequests([]))
+      .finally(() => setRequestsLoading(false));
+    getClubMembers(club.id)
+      .then(setMembers)
+      .catch(() => setMembers([]))
+      .finally(() => setMembersLoading(false));
+  }, [club.id]);
+
+  async function changeRole(userId: string, role: "MODERATOR" | "MEMBER") {
+    setMemberBusyId(userId);
+    try {
+      await setMemberRole(club.id, userId, role);
+      setMembers((prev) => prev.map((m) => (m.userId === userId ? { ...m, role } : m)));
+    } catch {
+      /* keep prior state on failure */
+    } finally {
+      setMemberBusyId(null);
+    }
+  }
+
+  async function kickMember(userId: string) {
+    setMemberBusyId(userId);
+    try {
+      await removeMember(club.id, userId);
+      setMembers((prev) => prev.filter((m) => m.userId !== userId));
+    } catch {
+      /* ignore */
+    } finally {
+      setMemberBusyId(null);
+    }
+  }
+
+  async function handleTransfer(userId: string) {
+    if (!confirm("Transfer ownership? You will become a moderator and cannot undo this.")) return;
+    setMemberBusyId(userId);
+    try {
+      await transferOwnership(club.id, userId);
+      setMembers((prev) =>
+        prev.map((m) => {
+          if (m.userId === userId) return { ...m, role: "OWNER" };
+          if (m.userId === currentUserId) return { ...m, role: "MODERATOR" };
+          return m;
+        })
+      );
+    } catch {
+      /* ignore */
+    } finally {
+      setMemberBusyId(null);
+    }
+  }
+
+  async function handleRequest(requestId: string, action: "approve" | "reject") {
+    setActioningId(requestId);
+    try {
+      if (action === "approve") await approveClubRequest(club.id, requestId);
+      else await rejectClubRequest(club.id, requestId);
+      setRequests((prev) => prev.filter((r) => r.requestId !== requestId));
+    } catch {
+      // leave the request in the list if the action failed
+    } finally {
+      setActioningId(null);
+    }
+  }
+
+
   async function handleCover(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -507,6 +583,189 @@ function SettingsForm({
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Moderation */}
+          {tab === "moderation" && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <div className="px-gutter py-stack-md border-b border-border-subtle">
+                <h2 className="font-headline-md text-headline-md text-primary">
+                  Moderation
+                </h2>
+              </div>
+              <div className="p-gutter">
+                <div className="flex items-center justify-between mb-stack-md">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                    Pending join requests
+                  </p>
+                  {requests.length > 0 && (
+                    <span className="bg-primary text-white text-[11px] font-bold rounded-full px-2 py-0.5">
+                      {requests.length}
+                    </span>
+                  )}
+                </div>
+
+                {requestsLoading ? (
+                  <div className="py-12 flex justify-center">
+                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : requests.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <span className="material-symbols-outlined text-on-surface-variant text-[40px] opacity-30 mb-3">
+                      inbox
+                    </span>
+                    <p className="text-sm text-on-surface-variant">
+                      No pending requests.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border-subtle">
+                    {requests.map((r) => {
+                      const busy = actioningId === r.requestId;
+                      return (
+                        <div
+                          key={r.requestId}
+                          className="flex items-center justify-between gap-3 py-3"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <img
+                              src={
+                                r.profilePictureUrl ??
+                                `https://api.dicebear.com/9.x/avataaars/svg?seed=${r.username}`
+                              }
+                              alt={r.displayName}
+                              className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="font-label-md text-on-surface truncate">
+                                {r.displayName}
+                              </p>
+                              <p className="text-sm text-on-surface-variant truncate">
+                                @{r.username}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              onClick={() => handleRequest(r.requestId, "reject")}
+                              disabled={busy}
+                              className="px-3 py-1.5 text-sm text-error border border-red-200 rounded-lg hover:bg-red-50 font-label-md transition-colors disabled:opacity-50"
+                            >
+                              Decline
+                            </button>
+                            <button
+                              onClick={() => handleRequest(r.requestId, "approve")}
+                              disabled={busy}
+                              className="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:opacity-90 font-label-md transition-opacity disabled:opacity-50"
+                            >
+                              {busy ? "…" : "Approve"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Team */}
+          {tab === "team" && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-gutter py-stack-md border-b border-border-subtle">
+                <h2 className="font-headline-md text-headline-md text-primary">Team</h2>
+                <span className="text-sm text-on-surface-variant">
+                  {members.length} member{members.length === 1 ? "" : "s"}
+                </span>
+              </div>
+
+              {membersLoading ? (
+                <div className="py-12 flex justify-center">
+                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <div className="divide-y divide-border-subtle">
+                  {members.map((m) => {
+                    const isSelf = m.userId === currentUserId;
+                    const busy = memberBusyId === m.userId;
+                    const roleLabel =
+                      m.role === "OWNER" ? "Owner" : m.role === "MODERATOR" ? "Moderator" : "Member";
+                    return (
+                      <div
+                        key={m.userId}
+                        className="flex items-center justify-between gap-3 px-gutter py-4"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={
+                              m.profilePictureUrl ??
+                              `https://api.dicebear.com/9.x/avataaars/svg?seed=${m.username}`
+                            }
+                            alt={m.displayName}
+                            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <p className="font-label-md text-on-surface truncate">
+                              {m.displayName} {isSelf && <span className="text-on-surface-variant">(you)</span>}
+                            </p>
+                            <p
+                              className={cn(
+                                "text-[11px] font-bold uppercase tracking-tight",
+                                m.role === "OWNER" ? "text-primary" : "text-on-surface-variant"
+                              )}
+                            >
+                              {roleLabel}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Actions — owners manage everyone but themselves; the owner row has none */}
+                        {m.role !== "OWNER" && !isSelf && (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {isOwner && m.role === "MEMBER" && (
+                              <button
+                                onClick={() => changeRole(m.userId, "MODERATOR")}
+                                disabled={busy}
+                                className="px-3 py-1.5 text-sm text-action-blue border border-action-blue/30 rounded-lg hover:bg-action-blue/5 font-label-md transition-colors disabled:opacity-50"
+                              >
+                                Make mod
+                              </button>
+                            )}
+                            {isOwner && m.role === "MODERATOR" && (
+                              <button
+                                onClick={() => changeRole(m.userId, "MEMBER")}
+                                disabled={busy}
+                                className="px-3 py-1.5 text-sm text-on-surface-variant border border-border-subtle rounded-lg hover:bg-surface-container-low font-label-md transition-colors disabled:opacity-50"
+                              >
+                                Remove mod
+                              </button>
+                            )}
+                            {isOwner && (
+                              <button
+                                onClick={() => handleTransfer(m.userId)}
+                                disabled={busy}
+                                title="Transfer ownership"
+                                className="px-3 py-1.5 text-sm text-on-surface-variant border border-border-subtle rounded-lg hover:bg-surface-container-low font-label-md transition-colors disabled:opacity-50"
+                              >
+                                Make owner
+                              </button>
+                            )}
+                            <button
+                              onClick={() => kickMember(m.userId)}
+                              disabled={busy}
+                              className="px-3 py-1.5 text-sm text-error border border-red-200 rounded-lg hover:bg-red-50 font-label-md transition-colors disabled:opacity-50"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
