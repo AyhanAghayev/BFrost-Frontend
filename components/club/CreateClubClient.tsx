@@ -254,7 +254,231 @@ export default function CreateClubClient() {
 
   return (
     <div className="flex-1 min-w-0">
-      {/* form UI added in the next commit */}
+      <div className="max-w-5xl mx-auto px-4 md:px-8 py-8">
+
+        {/* Back */}
+        <Link
+          href="/clubs"
+          className="inline-flex items-center gap-1.5 text-body-sm text-on-surface-variant hover:text-on-surface mb-8 transition-colors group"
+        >
+          <span className="material-symbols-outlined text-[18px] transition-transform group-hover:-translate-x-0.5">
+            arrow_back
+          </span>
+          All clubs
+        </Link>
+
+        {/* Header */}
+        <div className="mb-10">
+          <h1 className="font-headline-xl text-headline-xl font-bold text-on-surface tracking-tight mb-2">
+            Found a Club
+          </h1>
+          <p className="text-body-md text-on-surface-variant">
+            Start something that matters at your university.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-x-10 gap-y-8 items-start">
+
+          {/* ── Left: sticky preview ── */}
+          <div className="lg:sticky lg:top-24 space-y-4">
+            <PreviewCard
+              name={name}
+              description={description}
+              category={category}
+              tags={tags}
+              palette={palette}
+              isPublic={isPublic}
+            />
+
+            {/* Palette row */}
+            <div>
+              <p className="text-label-sm font-semibold uppercase tracking-[0.12em] text-on-surface-variant mb-3">
+                Club colour
+              </p>
+              <div className="flex items-center gap-2.5">
+                {PALETTES.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPalette(p)}
+                    title={p.label}
+                    aria-label={`${p.label} colour`}
+                    aria-pressed={palette.id === p.id}
+                    className={cn(
+                      "w-8 h-8 rounded-full transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-action-blue",
+                      palette.id === p.id
+                        ? "ring-2 ring-offset-2 ring-on-surface/80 scale-[1.15]"
+                        : "hover:scale-105 opacity-70 hover:opacity-100",
+                    )}
+                    style={{ background: `linear-gradient(135deg, ${p.from}, ${p.to})` }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <p className="text-label-sm text-on-surface-variant/50 leading-relaxed">
+              Upload a cover image and logo from club settings after you&apos;ve created it.
+            </p>
+          </div>
+
+          {/* ── Right: form ── */}
+          <form onSubmit={handleSubmit} className="space-y-10">
+
+            {/* Identity */}
+            <Section heading="Identity">
+              {/* Name */}
+              <div>
+                <label htmlFor="cc-name" className={labelCls}>
+                  Name <span className="text-error normal-case">*</span>
+                </label>
+                <input
+                  id="cc-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  placeholder="e.g. Robotics & Automation Society"
+                  maxLength={80}
+                  required
+                  className={fieldCls}
+                />
+              </div>
+
+              {/* Slug */}
+              <div>
+                <label htmlFor="cc-slug" className={labelCls}>
+                  URL <span className="text-error normal-case">*</span>
+                </label>
+                <div
+                  className={cn(
+                    "flex items-stretch rounded-xl border bg-surface-faint overflow-hidden",
+                    "transition-all focus-within:ring-2 focus-within:ring-action-blue focus-within:border-transparent",
+                    slugError ? "border-error" : "border-border-subtle",
+                  )}
+                >
+                  <span className="flex items-center px-3 text-label-sm text-on-surface-variant/50 bg-surface-container border-r border-border-subtle select-none whitespace-nowrap">
+                    /clubs/
+                  </span>
+                  <input
+                    id="cc-slug"
+                    type="text"
+                    value={slug}
+                    onChange={(e) => handleSlugChange(e.target.value)}
+                    placeholder="robotics-automation"
+                    maxLength={64}
+                    required
+                    className="flex-1 px-3 py-3 bg-transparent text-body-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none"
+                  />
+                </div>
+                {slugError && (
+                  <p className="mt-1.5 flex items-center gap-1 text-label-sm text-error">
+                    <span className="material-symbols-outlined text-[14px]">error</span>
+                    {slugError}
+                  </p>
+                )}
+              </div>
+
+              {/* Description */}
+              <div>
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <label htmlFor="cc-desc" className={cn(labelCls, "mb-0")}>
+                    Description
+                  </label>
+                  <span className="text-label-sm text-on-surface-variant/40">
+                    {description.length}/500
+                  </span>
+                </div>
+                <textarea
+                  id="cc-desc"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What does your club do? Who is it for? What makes it worth joining?"
+                  maxLength={500}
+                  rows={4}
+                  className={cn(fieldCls, "resize-none")}
+                />
+              </div>
+            </Section>
+
+            {/* Character */}
+            <Section heading="Character">
+              {/* Category */}
+              <div>
+                <label htmlFor="cc-cat" className={labelCls}>
+                  Category <span className="text-error normal-case">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    id="cc-cat"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value as ClubCategory)}
+                    required
+                    className={cn(
+                      fieldCls,
+                      "appearance-none pr-10",
+                      !category && "text-on-surface-variant/40",
+                    )}
+                  >
+                    <option value="" disabled>Pick a category…</option>
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">
+                    expand_more
+                  </span>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div>
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <label htmlFor="cc-tags" className={cn(labelCls, "mb-0")}>Tags</label>
+                  <span className="text-label-sm text-on-surface-variant/40">{tags.length}/8</span>
+                </div>
+                <div
+                  className={cn(
+                    "flex flex-wrap gap-2 px-3 py-2.5 bg-surface-faint border border-border-subtle rounded-xl",
+                    "transition-all focus-within:ring-2 focus-within:ring-action-blue focus-within:border-transparent min-h-[48px]",
+                  )}
+                >
+                  {tags.map((t) => (
+                    <span
+                      key={t}
+                      className="inline-flex items-center gap-1 text-label-sm px-2.5 py-1 bg-primary/10 text-primary rounded-full"
+                    >
+                      #{t}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(t)}
+                        aria-label={`Remove ${t}`}
+                        className="text-primary/60 hover:text-primary transition-colors ml-0.5"
+                      >
+                        <span className="material-symbols-outlined text-[12px]">close</span>
+                      </button>
+                    </span>
+                  ))}
+                  {tags.length < 8 && (
+                    <input
+                      id="cc-tags"
+                      type="text"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={onTagKeyDown}
+                      onBlur={() => { if (tagInput.trim()) commitTag(tagInput); }}
+                      placeholder={tags.length === 0 ? "Add tags — press Enter or comma…" : ""}
+                      className="flex-1 min-w-[140px] bg-transparent text-body-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none py-0.5"
+                    />
+                  )}
+                </div>
+                <p className="mt-1.5 text-label-sm text-on-surface-variant/50">
+                  Up to 8 tags. Letters, numbers, and hyphens only.
+                </p>
+              </div>
+            </Section>
+
+          </form>
+        </div>
+      </div>
     </div>
   );
 }
