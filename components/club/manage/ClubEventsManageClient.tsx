@@ -247,7 +247,216 @@ function CreateEventModal({
     }
   }
 
-  return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div
+        ref={dialogRef}
+        className="relative bg-white rounded-2xl shadow-xl border border-border-subtle w-full max-w-lg max-h-[90vh] overflow-y-auto"
+      >
+        {/* header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border-subtle">
+          <h2 className="font-headline-md text-headline-md text-primary">
+            {isEdit ? "Edit Event" : "Create Event"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-on-surface-variant hover:text-on-surface transition-colors"
+          >
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-4">
+          {/* cover image */}
+          <div className="flex flex-col gap-1.5">
+            <label className="font-label-md text-label-md text-on-surface">
+              Cover image{" "}
+              <span className="font-normal text-on-surface-variant">(optional)</span>
+            </label>
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleCover}
+            />
+            <button
+              type="button"
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingCover}
+              className="relative group block h-32 w-full rounded-xl border-2 border-dashed border-border-subtle overflow-hidden hover:border-action-blue transition-colors bg-surface-faint disabled:cursor-wait"
+            >
+              {form.coverImageUrl && (
+                <img
+                  src={form.coverImageUrl}
+                  alt="Event cover"
+                  className="absolute inset-0 w-full h-full object-cover group-hover:opacity-40 transition-opacity"
+                />
+              )}
+              <div
+                className={cn(
+                  "absolute inset-0 flex flex-col items-center justify-center gap-1 transition-opacity z-10",
+                  uploadingCover || !form.coverImageUrl ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                )}
+              >
+                <span className="material-symbols-outlined text-action-blue text-[26px]">
+                  {uploadingCover ? "hourglass_empty" : "add_photo_alternate"}
+                </span>
+                <span className="text-[11px] font-bold text-action-blue uppercase tracking-wider">
+                  {uploadingCover ? "Uploading…" : form.coverImageUrl ? "Replace image" : "Add cover image"}
+                </span>
+              </div>
+            </button>
+          </div>
+
+          {/* title */}
+          <div className="flex flex-col gap-1.5">
+            <label className="font-label-md text-label-md text-on-surface">
+              Event title
+            </label>
+            <input
+              className={inputCls}
+              placeholder="e.g. Spring Hackathon Kickoff"
+              value={form.title}
+              onChange={(e) => set("title", e.target.value)}
+            />
+          </div>
+
+          {/* format */}
+          <div className="flex flex-col gap-1.5">
+            <label className="font-label-md text-label-md text-on-surface">
+              Format
+            </label>
+            <div className="flex gap-2">
+              {(["in-person", "online", "hybrid"] as EventFormat[]).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => set("format", f)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-body-sm font-medium transition-colors ${
+                    form.format === f
+                      ? "border-action-blue bg-action-blue/[0.06] text-action-blue"
+                      : "border-border-subtle text-on-surface-variant hover:border-action-blue/40"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">
+                    {FORMAT_META[f].icon}
+                  </span>
+                  {FORMAT_META[f].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* location */}
+          <div className="flex flex-col gap-1.5">
+            <label className="font-label-md text-label-md text-on-surface">
+              Location
+            </label>
+            <input
+              className={inputCls}
+              placeholder={
+                form.format === "online"
+                  ? "e.g. Zoom (link sent to members)"
+                  : "e.g. Engineering Building, Lab 3"
+              }
+              value={form.location}
+              onChange={(e) => set("location", e.target.value)}
+            />
+          </div>
+
+          {/* dates */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="font-label-md text-label-md text-on-surface">
+                Starts
+              </label>
+              <input
+                type="datetime-local"
+                className={inputCls}
+                min={toDatetimeLocal(new Date().toISOString())}
+                value={form.startsAt}
+                onChange={(e) => set("startsAt", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="font-label-md text-label-md text-on-surface">
+                Ends
+              </label>
+              <input
+                type="datetime-local"
+                className={inputCls}
+                min={form.startsAt || toDatetimeLocal(new Date().toISOString())}
+                value={form.endsAt}
+                onChange={(e) => set("endsAt", e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* capacity */}
+          <div className="flex flex-col gap-1.5">
+            <label className="font-label-md text-label-md text-on-surface">
+              Capacity{" "}
+              <span className="font-normal text-on-surface-variant">(optional)</span>
+            </label>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              inputMode="numeric"
+              className={inputCls}
+              placeholder="Max attendees — leave blank for unlimited"
+              value={form.capacity}
+              onChange={(e) => set("capacity", e.target.value)}
+            />
+          </div>
+
+          {/* description */}
+          <div className="flex flex-col gap-1.5">
+            <label className="font-label-md text-label-md text-on-surface">
+              Description{" "}
+              <span className="font-normal text-on-surface-variant">(optional)</span>
+            </label>
+            <textarea
+              rows={3}
+              className={`${inputCls} resize-none`}
+              placeholder="What should attendees expect?"
+              value={form.description}
+              onChange={(e) => set("description", e.target.value)}
+            />
+          </div>
+
+          {error && (
+            <p className="text-error text-body-sm flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px]">error</span>
+              {error}
+            </p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-border-subtle text-on-surface-variant font-label-md hover:bg-surface-faint transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 py-2.5 rounded-xl bg-primary text-white font-label-md hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {submitting ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create event")}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
