@@ -1,10 +1,18 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/stores/auth.store";
-import { updateProfile, changePassword, changeEmail, deleteAccount } from "@/lib/api/users";
+import {
+  updateProfile,
+  changePassword,
+  changeEmail,
+  deleteAccount,
+  getNotificationPrefs,
+  updateNotificationPrefs,
+  type NotificationPrefs,
+} from "@/lib/api/users";
 import { uploadImage } from "@/lib/api/upload";
 import {
   PROFILE_BACKGROUNDS,
@@ -19,6 +27,17 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "account", label: "Account", icon: "manage_accounts" },
   { id: "notifications", label: "Notifications", icon: "notifications" },
   { id: "appearance", label: "Appearance", icon: "palette" },
+];
+
+const NOTIF_ITEMS: { key: keyof NotificationPrefs; label: string; desc: string }[] = [
+  { key: "follow", label: "New followers", desc: "Someone follows you" },
+  { key: "like", label: "Likes", desc: "Someone likes your post" },
+  { key: "comment", label: "Comments", desc: "Someone replies to your content" },
+  {
+    key: "joinRequest",
+    label: "Join requests",
+    desc: "New membership requests for clubs you manage",
+  },
 ];
 
 export default function SettingsPageClient() {
@@ -44,6 +63,21 @@ export default function SettingsPageClient() {
   const [deletePw, setDeletePw] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState("");
+
+  const [notifs, setNotifs] = useState<NotificationPrefs>({
+    follow: true,
+    like: true,
+    comment: true,
+    joinRequest: true,
+  });
+  const [notifsLoaded, setNotifsLoaded] = useState(false);
+
+  useEffect(() => {
+    getNotificationPrefs()
+      .then(setNotifs)
+      .catch(() => {})
+      .finally(() => setNotifsLoaded(true));
+  }, []);
 
   async function handleChangePassword() {
     if (!pw.current || pw.next.length < 8) {
@@ -143,6 +177,14 @@ export default function SettingsPageClient() {
   }
 
   if (!currentUser) return null;
+
+  function toggleNotif(key: keyof NotificationPrefs) {
+    const next = !notifs[key];
+    setNotifs((p) => ({ ...p, [key]: next }));
+    updateNotificationPrefs({ [key]: next }).catch(() =>
+      setNotifs((p) => ({ ...p, [key]: !next }))
+    );
+  }
 
   return (
     <div className="flex-1 min-w-0 px-margin-mobile md:px-gutter py-gutter">
@@ -551,6 +593,53 @@ export default function SettingsPageClient() {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {tab === "notifications" && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <div className="px-gutter py-stack-md border-b border-border-subtle">
+                <h2 className="font-headline-md text-headline-md text-primary">
+                  Notifications
+                </h2>
+              </div>
+
+              <div className="divide-y divide-border-subtle">
+                {NOTIF_ITEMS.map((item) => {
+                  const on = notifs[item.key];
+                  return (
+                    <div
+                      key={item.key}
+                      className="flex items-center justify-between px-gutter py-4"
+                    >
+                      <div>
+                        <p className="font-label-md text-on-surface">{item.label}</p>
+                        <p className="text-sm text-on-surface-variant">{item.desc}</p>
+                      </div>
+                      <label className={cn(
+                        "relative inline-flex items-center flex-shrink-0 ml-8",
+                        notifsLoaded ? "cursor-pointer" : "cursor-wait opacity-60"
+                      )}>
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={on}
+                          disabled={!notifsLoaded}
+                          onChange={() => toggleNotif(item.key)}
+                        />
+                        <div className="relative w-11 h-6 rounded-full bg-border-subtle transition-colors peer-checked:bg-action-blue">
+                          <span
+                            className={cn(
+                              "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform",
+                              on && "translate-x-5"
+                            )}
+                          />
+                        </div>
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
