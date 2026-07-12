@@ -771,5 +771,283 @@ function ManageForm({ club, events, currentUserId }: Props) {
     ? localEvents.find((e) => e.id === rsvpEventId) ?? null
     : null;
 
-  return null;
+  return (
+    <>
+      {showCreate && (
+        <CreateEventModal
+          clubId={club.id}
+          clubName={club.name}
+          currentUserId={currentUserId}
+          onClose={() => setShowCreate(false)}
+          onCreate={handleCreate}
+        />
+      )}
+      {editEvent && (
+        <CreateEventModal
+          clubId={club.id}
+          clubName={club.name}
+          currentUserId={currentUserId}
+          event={editEvent}
+          onClose={() => setEditEvent(null)}
+          onCreate={handleCreate}
+          onSave={handleSave}
+        />
+      )}
+      {rsvpEvent && (
+        <RSVPsModal event={rsvpEvent} onClose={() => setRsvpEventId(null)} />
+      )}
+
+      <div className="max-w-5xl mx-auto py-gutter px-margin-mobile md:px-gutter flex flex-col gap-stack-lg">
+        {/* breadcrumb + header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-stack-md">
+          <div>
+            <Link
+              href={`/clubs/${club.slug}`}
+              className="inline-flex items-center gap-1 text-on-surface-variant text-body-sm hover:text-primary transition-colors mb-2"
+            >
+              <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+              {club.name}
+            </Link>
+            <h1 className="font-headline-md text-headline-md text-primary">
+              Event Management
+            </h1>
+            <p className="text-on-surface-variant text-body-sm mt-0.5">
+              Schedule, publish, and monitor your club&apos;s events.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-stack-sm bg-primary text-white px-6 py-2.5 rounded-xl font-label-md hover:opacity-90 active:scale-95 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Create event
+          </button>
+        </div>
+
+        {/* stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-stack-md">
+          <StatCard
+            label="Upcoming RSVPs"
+            value={totalRSVPs}
+            sub={`across ${upcoming.length} event${upcoming.length === 1 ? "" : "s"}`}
+            icon="confirmation_number"
+          />
+          <StatCard
+            label="Upcoming"
+            value={upcoming.length}
+            sub={
+              nextEvent
+                ? `Next: ${fmtDateShort(nextEvent.startsAt)}`
+                : "No upcoming events"
+            }
+            icon="calendar_month"
+          />
+          <StatCard
+            label="Events held"
+            value={past.length}
+            sub={past.length > 0 ? "Since club founding" : "Host your first event"}
+            icon="history"
+          />
+          <StatCard
+            label="Avg turnout"
+            value={avgAttendance !== null ? avgAttendance : "—"}
+            sub={avgAttendance !== null ? "attendees per event" : "No past data yet"}
+            icon="groups"
+          />
+        </div>
+
+        {/* upcoming events */}
+        <section>
+          <div className="flex items-center justify-between mb-stack-md">
+            <h2 className="font-headline-md text-headline-md text-primary">
+              Upcoming events
+            </h2>
+            <Link
+              href="/events"
+              className="text-action-blue font-label-md text-label-md flex items-center gap-1 hover:underline"
+            >
+              Public calendar
+              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </Link>
+          </div>
+
+          {upcoming.length === 0 ? (
+            <div className="bg-white border border-border-subtle rounded-xl flex flex-col items-center gap-3 py-14 text-center">
+              <span className="material-symbols-outlined text-[40px] text-on-surface-variant/30">
+                event_upcoming
+              </span>
+              <p className="text-on-surface-variant text-body-sm max-w-xs">
+                No upcoming events yet. Create one to start collecting RSVPs.
+              </p>
+              <button
+                onClick={() => setShowCreate(true)}
+                className="mt-1 inline-flex items-center gap-1.5 bg-primary text-white px-5 py-2 rounded-xl font-label-md text-label-md hover:opacity-90 transition-opacity"
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                Create first event
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-stack-md">
+              {upcoming.map((e) => (
+                <EventRow
+                  key={e.id}
+                  event={e}
+                  onEdit={setEditEvent}
+                  onDelete={handleDelete}
+                  onViewRSVPs={setRsvpEventId}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* bottom grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-stack-lg">
+          {/* past events table */}
+          <div className="lg:col-span-2">
+            <h2 className="font-headline-md text-headline-md text-primary mb-stack-md">
+              Past events
+            </h2>
+
+            {past.length === 0 ? (
+              <div className="bg-white border border-border-subtle rounded-xl flex flex-col items-center gap-2 py-10 text-center">
+                <span className="material-symbols-outlined text-[32px] text-on-surface-variant/30">
+                  history
+                </span>
+                <p className="text-on-surface-variant text-body-sm">
+                  Past events will appear here after they&apos;re over.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white border border-border-subtle rounded-xl overflow-x-auto">
+                <table className="w-full text-left min-w-[480px]">
+                  <thead className="bg-surface-faint border-b border-border-subtle">
+                    <tr>
+                      <th className="px-stack-md py-3 font-label-md text-label-md text-on-surface-variant">
+                        Event
+                      </th>
+                      <th className="px-stack-md py-3 font-label-md text-label-md text-on-surface-variant hidden sm:table-cell">
+                        Date
+                      </th>
+                      <th className="px-stack-md py-3 font-label-md text-label-md text-on-surface-variant">
+                        Attended
+                      </th>
+                      <th className="px-stack-md py-3 font-label-md text-label-md text-on-surface-variant">
+                        Format
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-subtle">
+                    {past.map((e) => {
+                      const meta = FORMAT_META[e.format];
+                      return (
+                        <tr key={e.id} className="hover:bg-surface-faint transition-colors">
+                          <td className="px-stack-md py-3.5">
+                            <p className="font-medium text-on-surface text-body-sm line-clamp-1">
+                              {e.title}
+                            </p>
+                            <p className="text-on-surface-variant text-[12px] sm:hidden mt-0.5">
+                              {fmtDateShort(e.startsAt)}
+                            </p>
+                          </td>
+                          <td className="px-stack-md py-3.5 text-body-sm text-on-surface-variant hidden sm:table-cell whitespace-nowrap">
+                            {fmtDateShort(e.startsAt)}
+                          </td>
+                          <td className="px-stack-md py-3.5">
+                            <span className="font-semibold text-primary text-body-sm">
+                              {e.attendeeCount}
+                            </span>
+                            <span className="text-on-surface-variant text-body-sm"> people</span>
+                          </td>
+                          <td className="px-stack-md py-3.5">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase ${meta.cls}`}
+                            >
+                              {meta.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* right panel */}
+          <div className="lg:col-span-1 flex flex-col gap-stack-md">
+            <h2 className="font-headline-md text-headline-md text-primary">
+              Quick actions
+            </h2>
+
+            {/* create CTA */}
+            <div className="bg-white border border-border-subtle rounded-xl p-5 flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-white text-[20px]">
+                    add_circle
+                  </span>
+                </div>
+                <div>
+                  <p className="font-label-md text-label-md text-on-surface">
+                    Schedule an event
+                  </p>
+                  <p className="text-body-sm text-on-surface-variant">
+                    Publish in seconds.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCreate(true)}
+                className="w-full py-2.5 bg-primary text-white rounded-xl font-label-md text-label-md hover:opacity-90 transition-opacity"
+              >
+                Create event
+              </button>
+            </div>
+
+            {/* settings link */}
+            <Link
+              href={`/clubs/${club.slug}/settings`}
+              className="bg-white border border-border-subtle rounded-xl p-5 flex items-center gap-3 hover:border-action-blue/30 transition-colors group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-surface-faint flex items-center justify-center shrink-0 group-hover:bg-action-blue/10 transition-colors">
+                <span className="material-symbols-outlined text-on-surface-variant text-[20px] group-hover:text-action-blue transition-colors">
+                  settings
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-label-md text-label-md text-on-surface">
+                  Club settings
+                </p>
+                <p className="text-body-sm text-on-surface-variant">
+                  Manage members & visibility
+                </p>
+              </div>
+              <span className="material-symbols-outlined text-on-surface-variant text-[18px]">
+                arrow_forward_ios
+              </span>
+            </Link>
+
+            {/* tip */}
+            <div className="bg-action-blue/[0.05] border border-action-blue/20 rounded-xl p-5 flex gap-3">
+              <span className="material-symbols-outlined text-action-blue shrink-0 mt-0.5">
+                lightbulb
+              </span>
+              <div>
+                <p className="font-label-md text-label-md text-action-blue mb-1">
+                  Boost attendance
+                </p>
+                <p className="text-body-sm text-on-surface-variant leading-relaxed">
+                  Events with a cover image and full description get 40% more RSVPs on
+                  average. Add both when you create.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }
