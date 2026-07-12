@@ -3,9 +3,11 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { formatCount } from "@/lib/utils/format";
+import { cn } from "@/lib/utils";
+import { formatCount, formatRelativeTime } from "@/lib/utils/format";
 import { searchClubs } from "@/lib/api/clubs";
-import type { Club } from "@/lib/types";
+import { searchUsers } from "@/lib/api/users";
+import type { Club, User, Post } from "@/lib/types";
 
 const CATEGORY_ICON: Record<string, string> = {
   Technology: "computer",
@@ -23,16 +25,17 @@ export default function SearchPageClient() {
 
   const [localQuery, setLocalQuery] = useState(q);
   const [rawClubs, setRawClubs] = useState<Club[]>([]);
+  const [rawUsers, setRawUsers] = useState<User[]>([]);
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!q.trim()) { setRawClubs([]); return; }
+    if (!q.trim()) { setRawClubs([]); setRawUsers([]); return; }
     debounceRef.current = setTimeout(() => {
       setSearching(true);
-      searchClubs(q)
-        .then((clubs) => setRawClubs(clubs))
+      Promise.all([searchClubs(q), searchUsers(q)])
+        .then(([clubs, users]) => { setRawClubs(clubs); setRawUsers(users); })
         .catch(console.error)
         .finally(() => setSearching(false));
     }, 300);
@@ -40,7 +43,9 @@ export default function SearchPageClient() {
   }, [q]);
 
   const allClubs = rawClubs;
-  const hasResults = allClubs.length > 0;
+  const allUsers = rawUsers;
+  const allPosts: Post[] = [];
+  const hasResults = allClubs.length + allUsers.length + allPosts.length > 0;
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -101,6 +106,30 @@ export default function SearchPageClient() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-stack-md">
                 {allClubs.map((club) => (
                   <ClubCard key={club.id} club={club} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* People section */}
+          {allUsers.length > 0 && (
+            <section>
+              <SectionHeader title="People" count={allUsers.length} showViewAll={false} onViewAll={() => {}} />
+              <div className="flex flex-col gap-stack-sm">
+                {allUsers.map((user) => (
+                  <PersonRow key={user.id} user={user} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Posts section */}
+          {allPosts.length > 0 && (
+            <section>
+              <SectionHeader title="Posts" count={allPosts.length} showViewAll={false} onViewAll={() => {}} />
+              <div className="flex flex-col gap-stack-md">
+                {allPosts.map((post) => (
+                  <PostRow key={post.id} post={post} />
                 ))}
               </div>
             </section>
@@ -169,5 +198,125 @@ function ClubCard({ club }: { club: Club }) {
         </p>
       </div>
     </Link>
+  );
+}
+
+function PersonRow({ user }: { user: User }) {
+  const [following, setFollowing] = useState(user.isFollowing);
+
+  return (
+    <div className="flex items-center justify-between bg-white border border-border-subtle rounded-xl px-stack-md py-3">
+      <Link href={`/profile/${user.username}`} className="flex items-center gap-stack-md group">
+        <img
+          src={user.avatarUrl}
+          alt={user.displayName}
+          className="w-11 h-11 rounded-full object-cover flex-shrink-0"
+        />
+        <div>
+          <div className="flex items-center gap-1.5">
+            <p className="font-label-md text-primary group-hover:text-action-blue transition-colors">
+              {user.displayName}
+            </p>
+            {user.isVerified && (
+              <span
+                className="material-symbols-outlined text-action-blue text-[14px]"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                verified
+              </span>
+            )}
+          </div>
+          <p className="text-label-sm text-on-surface-variant">
+            {user.department} · {user.university}
+          </p>
+        </div>
+      </Link>
+      <button
+        onClick={() => setFollowing((p) => !p)}
+        className={cn(
+          "px-4 py-1.5 rounded-lg text-label-sm font-semibold transition-colors flex-shrink-0",
+          following
+            ? "bg-surface-container text-on-surface-variant border border-border-subtle"
+            : "border-2 border-action-blue text-action-blue hover:bg-action-blue/5"
+        )}
+      >
+        {following ? "Following" : "Follow"}
+      </button>
+    </div>
+  );
+}
+
+function PostRow({ post }: { post: Post }) {
+  const [liked, setLiked] = useState(post.isLiked);
+  const [likeCount, setLikeCount] = useState(post.likeCount);
+
+  return (
+    <article className="bg-white border border-border-subtle rounded-xl overflow-hidden hover:shadow-md transition-shadow">
+      <div className="p-stack-md">
+        {/* Author row */}
+        <div className="flex items-center gap-stack-sm mb-stack-md">
+          <img
+            src={post.author.avatarUrl}
+            alt={post.author.displayName}
+            className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+          />
+          <div>
+            <p className="text-label-sm text-primary">
+              <span className="font-semibold">{post.author.displayName}</span>
+              <span className="text-on-surface-variant font-normal"> in </span>
+              <Link href={`/clubs/${post.clubId}`} className="text-action-blue hover:underline">
+                {post.clubName}
+              </Link>
+            </p>
+            <p className="text-[10px] text-on-surface-variant">{formatRelativeTime(post.createdAt)}</p>
+          </div>
+        </div>
+
+        {/* Content */}
+        <Link href={`/posts/${post.id}`}>
+          <h3 className="font-headline-md text-headline-md text-primary mb-stack-sm leading-snug hover:text-action-blue transition-colors">
+            {post.title}
+          </h3>
+          <p className="text-on-surface-variant text-sm line-clamp-2 mb-stack-md leading-relaxed">
+            {post.body}
+          </p>
+        </Link>
+
+        {post.imageUrl && (
+          <div className="rounded-lg overflow-hidden mb-stack-md border border-border-subtle">
+            <img src={post.imageUrl} alt="" className="w-full h-40 object-cover" />
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-gutter border-t border-border-subtle pt-stack-md">
+          <button
+            onClick={() => {
+              setLiked((p) => !p);
+              setLikeCount((p) => (liked ? p - 1 : p + 1));
+            }}
+            className={cn(
+              "flex items-center gap-1.5 transition-colors",
+              liked ? "text-action-blue" : "text-on-surface-variant hover:text-action-blue"
+            )}
+          >
+            <span
+              className="material-symbols-outlined text-[18px]"
+              style={liked ? { fontVariationSettings: "'FILL' 1" } : undefined}
+            >
+              thumb_up
+            </span>
+            <span className="text-label-sm">{formatCount(likeCount)}</span>
+          </button>
+          <Link
+            href={`/posts/${post.id}`}
+            className="flex items-center gap-1.5 text-on-surface-variant hover:text-action-blue transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">chat_bubble</span>
+            <span className="text-label-sm">{formatCount(post.commentCount)}</span>
+          </Link>
+        </div>
+      </div>
+    </article>
   );
 }
