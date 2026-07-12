@@ -14,6 +14,7 @@ import {
   type NotificationPrefs,
 } from "@/lib/api/users";
 import { uploadImage } from "@/lib/api/upload";
+import { useThemeStore, type Theme } from "@/lib/stores/theme.store";
 import {
   PROFILE_BACKGROUNDS,
   DEFAULT_BACKGROUND_ID,
@@ -29,6 +30,12 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "appearance", label: "Appearance", icon: "palette" },
 ];
 
+const THEME_OPTIONS: { id: Theme; label: string }[] = [
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+  { id: "system", label: "System" },
+];
+
 const NOTIF_ITEMS: { key: keyof NotificationPrefs; label: string; desc: string }[] = [
   { key: "follow", label: "New followers", desc: "Someone follows you" },
   { key: "like", label: "Likes", desc: "Someone likes your post" },
@@ -42,6 +49,8 @@ const NOTIF_ITEMS: { key: keyof NotificationPrefs; label: string; desc: string }
 
 export default function SettingsPageClient() {
   const { currentUser, setCurrentUser, clearAuth } = useAuthStore();
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("profile");
   const [saving, setSaving] = useState(false);
@@ -64,6 +73,7 @@ export default function SettingsPageClient() {
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState("");
 
+  // Notification preferences (loaded from backend)
   const [notifs, setNotifs] = useState<NotificationPrefs>({
     follow: true,
     like: true,
@@ -97,6 +107,33 @@ export default function SettingsPageClient() {
     }
   }
 
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !currentUser) return;
+    setUploadingAvatar(true);
+    setSaveMsg(null);
+    try {
+      const url = await uploadImage("avatars", file);
+      const updated = await updateProfile(currentUser.id, { profilePictureUrl: url });
+      setCurrentUser(updated);
+      setSaveMsg({ ok: true, text: "Photo updated." });
+    } catch (err: unknown) {
+      setSaveMsg({ ok: false, text: err instanceof Error ? err.message : "Upload failed" });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  const [form, setForm] = useState({
+    displayName: currentUser?.displayName ?? "",
+    username: currentUser?.username ?? "",
+    bio: currentUser?.bio ?? "",
+    department: currentUser?.department ?? "",
+    university: currentUser?.university ?? "",
+    background: currentUser?.backgroundUrl ?? DEFAULT_BACKGROUND_ID,
+  });
+
   async function handleChangeEmail() {
     if (!currentUser) return;
     setEmailSaving(true);
@@ -126,33 +163,6 @@ export default function SettingsPageClient() {
       setDeleting(false);
     }
   }
-
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !currentUser) return;
-    setUploadingAvatar(true);
-    setSaveMsg(null);
-    try {
-      const url = await uploadImage("avatars", file);
-      const updated = await updateProfile(currentUser.id, { profilePictureUrl: url });
-      setCurrentUser(updated);
-      setSaveMsg({ ok: true, text: "Photo updated." });
-    } catch (err: unknown) {
-      setSaveMsg({ ok: false, text: err instanceof Error ? err.message : "Upload failed" });
-    } finally {
-      setUploadingAvatar(false);
-    }
-  }
-
-  const [form, setForm] = useState({
-    displayName: currentUser?.displayName ?? "",
-    username: currentUser?.username ?? "",
-    bio: currentUser?.bio ?? "",
-    department: currentUser?.department ?? "",
-    university: currentUser?.university ?? "",
-    background: currentUser?.backgroundUrl ?? DEFAULT_BACKGROUND_ID,
-  });
 
   async function handleSaveProfile() {
     if (!currentUser) return;
@@ -643,6 +653,52 @@ export default function SettingsPageClient() {
               </div>
             </div>
           )}
+
+          {tab === "appearance" && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <div className="px-gutter py-stack-md border-b border-border-subtle">
+                <h2 className="font-headline-md text-headline-md text-primary">
+                  Appearance
+                </h2>
+              </div>
+              <div className="p-gutter">
+                <p className="font-label-md text-on-surface mb-1">Theme</p>
+                <p className="text-sm text-on-surface-variant mb-stack-md">
+                  Choose how BFrost looks. System follows your device.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-stack-md">
+                  {THEME_OPTIONS.map((opt) => {
+                    const selected = theme === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => setTheme(opt.id)}
+                        aria-pressed={selected}
+                        className={cn(
+                          "text-left rounded-xl border p-3 transition-all",
+                          selected
+                            ? "border-action-blue ring-2 ring-action-blue/30"
+                            : "border-border-subtle hover:border-action-blue/40"
+                        )}
+                      >
+                        <ThemePreview kind={opt.id} />
+                        <div className="flex items-center justify-between mt-3">
+                          <span className="font-label-md text-label-md text-on-surface">
+                            {opt.label}
+                          </span>
+                          {selected && (
+                            <span className="material-symbols-outlined text-[18px] text-action-blue">
+                              check_circle
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -651,6 +707,43 @@ export default function SettingsPageClient() {
 
 const inputCls =
   "w-full px-4 py-3 bg-surface-faint border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-action-blue transition-all";
+
+type Palette = { bg: string; card: string; line: string; accent: string };
+const LIGHT_PALETTE: Palette = { bg: "#f9fafc", card: "#ffffff", line: "#d8dee9", accent: "#2e5bff" };
+const DARK_PALETTE: Palette = { bg: "#0a0b10", card: "#1a1f2b", line: "#2b3344", accent: "#4f7df5" };
+
+function ThemeMock({ p }: { p: Palette }) {
+  return (
+    <div className="w-full h-full p-2 flex gap-1.5" style={{ background: p.bg }}>
+      <div className="w-1/4 rounded-sm" style={{ background: p.card }} />
+      <div className="flex-1 flex flex-col gap-1">
+        <div className="h-1.5 w-2/3 rounded-full" style={{ background: p.line }} />
+        <div className="h-1.5 w-1/2 rounded-full" style={{ background: p.line }} />
+        <div className="mt-auto h-3 w-1/2 rounded-sm" style={{ background: p.accent }} />
+      </div>
+    </div>
+  );
+}
+
+function ThemePreview({ kind }: { kind: Theme }) {
+  if (kind === "system") {
+    return (
+      <div className="aspect-video w-full rounded-lg overflow-hidden border border-border-subtle flex">
+        <div className="w-1/2 h-full overflow-hidden border-r border-border-subtle">
+          <div className="w-[200%] h-full"><ThemeMock p={LIGHT_PALETTE} /></div>
+        </div>
+        <div className="w-1/2 h-full overflow-hidden">
+          <div className="w-[200%] h-full -translate-x-1/2"><ThemeMock p={DARK_PALETTE} /></div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="aspect-video w-full rounded-lg overflow-hidden border border-border-subtle">
+      <ThemeMock p={kind === "dark" ? DARK_PALETTE : LIGHT_PALETTE} />
+    </div>
+  );
+}
 
 function Field({
   label,
