@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/stores/auth.store";
-import { updateProfile, changePassword, changeEmail } from "@/lib/api/users";
+import { updateProfile, changePassword, changeEmail, deleteAccount } from "@/lib/api/users";
 import { uploadImage } from "@/lib/api/upload";
 import {
   PROFILE_BACKGROUNDS,
@@ -21,7 +22,8 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 export default function SettingsPageClient() {
-  const { currentUser, setCurrentUser } = useAuthStore();
+  const { currentUser, setCurrentUser, clearAuth } = useAuthStore();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("profile");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -36,6 +38,12 @@ export default function SettingsPageClient() {
   const [emailForm, setEmailForm] = useState({ newEmail: "", password: "" });
   const [emailSaving, setEmailSaving] = useState(false);
   const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Delete account
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePw, setDeletePw] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState("");
 
   async function handleChangePassword() {
     if (!pw.current || pw.next.length < 8) {
@@ -69,6 +77,19 @@ export default function SettingsPageClient() {
       setEmailMsg({ ok: false, text: err instanceof Error ? err.message : "Failed to update email" });
     } finally {
       setEmailSaving(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    setDeleteErr("");
+    try {
+      await deleteAccount(deletePw);
+      clearAuth();
+      router.replace("/sign-in");
+    } catch (err: unknown) {
+      setDeleteErr(err instanceof Error ? err.message : "Failed to delete account");
+      setDeleting(false);
     }
   }
 
@@ -478,6 +499,57 @@ export default function SettingsPageClient() {
                       </span>
                     )}
                   </div>
+                </div>
+
+                {/* Danger zone */}
+                <div className="px-gutter py-stack-lg">
+                  <p className="font-label-md text-error mb-1">Danger zone</p>
+                  <p className="text-sm text-on-surface-variant mb-stack-md">
+                    Permanently delete your account and all associated data —
+                    posts, clubs you own, and events. This cannot be undone.
+                  </p>
+                  {!deleteOpen ? (
+                    <button
+                      onClick={() => { setDeleteOpen(true); setDeleteErr(""); setDeletePw(""); }}
+                      className="px-5 py-2.5 bg-red-50 border border-red-200 text-error rounded-xl font-label-md text-label-md hover:bg-red-100 transition-colors flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">
+                        delete_forever
+                      </span>
+                      Delete account
+                    </button>
+                  ) : (
+                    <div className="max-w-md rounded-xl border border-red-200 bg-red-50/50 p-4">
+                      <p className="text-sm text-on-surface mb-stack-md">
+                        Enter your password to confirm. This is permanent.
+                      </p>
+                      <input
+                        type="password"
+                        value={deletePw}
+                        onChange={(e) => setDeletePw(e.target.value)}
+                        placeholder="Current password"
+                        autoComplete="current-password"
+                        className={cn(inputCls, "mb-stack-md")}
+                      />
+                      {deleteErr && <p className="text-sm text-error mb-stack-md">{deleteErr}</p>}
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={handleDeleteAccount}
+                          disabled={deleting || !deletePw}
+                          className="px-5 py-2.5 bg-error text-white rounded-xl font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                        >
+                          {deleting ? "Deleting…" : "Permanently delete"}
+                        </button>
+                        <button
+                          onClick={() => { setDeleteOpen(false); setDeletePw(""); setDeleteErr(""); }}
+                          disabled={deleting}
+                          className="px-5 py-2.5 border border-border-subtle rounded-xl font-label-md text-label-md text-on-surface-variant hover:bg-white transition-colors disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
