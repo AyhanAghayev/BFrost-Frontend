@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/stores/auth.store";
-import { updateProfile } from "@/lib/api/users";
+import { updateProfile, changePassword } from "@/lib/api/users";
 import { uploadImage } from "@/lib/api/upload";
 import {
   PROFILE_BACKGROUNDS,
@@ -27,6 +27,27 @@ export default function SettingsPageClient() {
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [pw, setPw] = useState({ current: "", next: "" });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function handleChangePassword() {
+    if (!pw.current || pw.next.length < 8) {
+      setPwMsg({ ok: false, text: "New password must be at least 8 characters." });
+      return;
+    }
+    setPwSaving(true);
+    setPwMsg(null);
+    try {
+      await changePassword(pw.current, pw.next);
+      setPw({ current: "", next: "" });
+      setPwMsg({ ok: true, text: "Password updated." });
+    } catch (err: unknown) {
+      setPwMsg({ ok: false, text: err instanceof Error ? err.message : "Failed to update password" });
+    } finally {
+      setPwSaving(false);
+    }
+  }
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -319,6 +340,55 @@ export default function SettingsPageClient() {
                       className={inputCls}
                     />
                   </Field>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {tab === "account" && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <div className="px-gutter py-stack-md border-b border-border-subtle">
+                <h2 className="font-headline-md text-headline-md text-primary">
+                  Account
+                </h2>
+              </div>
+
+              <div className="divide-y divide-border-subtle">
+                {/* Password */}
+                <div className="px-gutter py-stack-lg">
+                  <p className="font-label-md text-on-surface mb-stack-md">Password</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-stack-md max-w-xl">
+                    <input
+                      type="password"
+                      value={pw.current}
+                      onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))}
+                      placeholder="Current password"
+                      autoComplete="current-password"
+                      className={inputCls}
+                    />
+                    <input
+                      type="password"
+                      value={pw.next}
+                      onChange={(e) => setPw((p) => ({ ...p, next: e.target.value }))}
+                      placeholder="New password (min 8 chars)"
+                      autoComplete="new-password"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 mt-stack-md">
+                    <button
+                      onClick={handleChangePassword}
+                      disabled={pwSaving}
+                      className="px-5 py-2.5 bg-primary text-white rounded-xl font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
+                      {pwSaving ? "Updating…" : "Update password"}
+                    </button>
+                    {pwMsg && (
+                      <span className={cn("text-sm", pwMsg.ok ? "text-emerald-600" : "text-error")}>
+                        {pwMsg.text}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
