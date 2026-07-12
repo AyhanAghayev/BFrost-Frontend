@@ -68,6 +68,38 @@ export default function ClubEventsManageClient({ slug }: { slug: string }) {
   return <ManageForm club={club} events={events} currentUserId={currentUser?.id ?? ""} />;
 }
 
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function fmtDateTime(iso: string): string {
+  const d = new Date(iso);
+  return (
+    d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }) +
+    " · " +
+    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+  );
+}
+
+function fmtDateShort(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function toDatetimeLocal(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const FORMAT_META: Record<EventFormat, { label: string; cls: string; icon: string }> = {
+  "in-person": { label: "In person", cls: "bg-emerald-50 text-emerald-700", icon: "location_on" },
+  online: { label: "Online", cls: "bg-blue-50 text-action-blue", icon: "videocam" },
+  hybrid: { label: "Hybrid", cls: "bg-purple-50 text-purple-700", icon: "sensors" },
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 function ManageForm({ club, events, currentUserId }: Props) {
