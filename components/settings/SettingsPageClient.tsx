@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/stores/auth.store";
-import { updateProfile, changePassword } from "@/lib/api/users";
+import { updateProfile, changePassword, changeEmail } from "@/lib/api/users";
 import { uploadImage } from "@/lib/api/upload";
 import {
   PROFILE_BACKGROUNDS,
@@ -31,6 +31,12 @@ export default function SettingsPageClient() {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Email change
+  const [emailEditing, setEmailEditing] = useState(false);
+  const [emailForm, setEmailForm] = useState({ newEmail: "", password: "" });
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
   async function handleChangePassword() {
     if (!pw.current || pw.next.length < 8) {
       setPwMsg({ ok: false, text: "New password must be at least 8 characters." });
@@ -46,6 +52,23 @@ export default function SettingsPageClient() {
       setPwMsg({ ok: false, text: err instanceof Error ? err.message : "Failed to update password" });
     } finally {
       setPwSaving(false);
+    }
+  }
+
+  async function handleChangeEmail() {
+    if (!currentUser) return;
+    setEmailSaving(true);
+    setEmailMsg(null);
+    try {
+      await changeEmail(emailForm.newEmail.trim(), emailForm.password);
+      setCurrentUser({ ...currentUser, email: emailForm.newEmail.trim() });
+      setEmailEditing(false);
+      setEmailForm({ newEmail: "", password: "" });
+      setEmailMsg({ ok: true, text: "Email updated." });
+    } catch (err: unknown) {
+      setEmailMsg({ ok: false, text: err instanceof Error ? err.message : "Failed to update email" });
+    } finally {
+      setEmailSaving(false);
     }
   }
 
@@ -344,7 +367,7 @@ export default function SettingsPageClient() {
               </div>
             </div>
           )}
-          
+
           {tab === "account" && (
             <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
               <div className="px-gutter py-stack-md border-b border-border-subtle">
@@ -354,6 +377,72 @@ export default function SettingsPageClient() {
               </div>
 
               <div className="divide-y divide-border-subtle">
+                {/* Email */}
+                <div className="px-gutter py-stack-lg">
+                  <p className="font-label-md text-on-surface mb-stack-md">
+                    Email address
+                  </p>
+                  {!emailEditing ? (
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="email"
+                        value={currentUser.email ?? "—"}
+                        readOnly
+                        className="flex-1 px-4 py-3 bg-surface-faint border border-border-subtle rounded-xl text-sm text-on-surface-variant cursor-not-allowed"
+                      />
+                      <button
+                        onClick={() => {
+                          setEmailEditing(true);
+                          setEmailMsg(null);
+                          setEmailForm({ newEmail: currentUser.email ?? "", password: "" });
+                        }}
+                        className="flex-shrink-0 px-5 py-3 border border-action-blue text-action-blue rounded-xl font-label-md text-label-md hover:bg-action-blue/5 transition-colors"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-stack-md max-w-xl">
+                      <input
+                        type="email"
+                        value={emailForm.newEmail}
+                        onChange={(e) => setEmailForm((p) => ({ ...p, newEmail: e.target.value }))}
+                        placeholder="New email address"
+                        autoComplete="email"
+                        className={inputCls}
+                      />
+                      <input
+                        type="password"
+                        value={emailForm.password}
+                        onChange={(e) => setEmailForm((p) => ({ ...p, password: e.target.value }))}
+                        placeholder="Current password"
+                        autoComplete="current-password"
+                        className={inputCls}
+                      />
+                      <div className="sm:col-span-2 flex items-center gap-3">
+                        <button
+                          onClick={handleChangeEmail}
+                          disabled={emailSaving || !emailForm.newEmail.trim() || !emailForm.password}
+                          className="px-5 py-2.5 bg-primary text-white rounded-xl font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                        >
+                          {emailSaving ? "Saving…" : "Save email"}
+                        </button>
+                        <button
+                          onClick={() => { setEmailEditing(false); setEmailForm({ newEmail: "", password: "" }); }}
+                          className="px-5 py-2.5 border border-border-subtle rounded-xl font-label-md text-label-md text-on-surface-variant hover:bg-surface-faint transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {emailMsg && (
+                    <p className={cn("text-sm mt-stack-md", emailMsg.ok ? "text-emerald-600" : "text-error")}>
+                      {emailMsg.text}
+                    </p>
+                  )}
+                </div>
+
                 {/* Password */}
                 <div className="px-gutter py-stack-lg">
                   <p className="font-label-md text-on-surface mb-stack-md">Password</p>
