@@ -717,5 +717,59 @@ function EventRow({
 // ── Main component ────────────────────────────────────────────────────────────
 
 function ManageForm({ club, events, currentUserId }: Props) {
+  const [localEvents, setLocalEvents] = useState<ClubEvent[]>(events);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editEvent, setEditEvent] = useState<ClubEvent | null>(null);
+  const [rsvpEventId, setRsvpEventId] = useState<string | null>(null);
+
+  const now = useMemo(() => new Date().toISOString(), []);
+
+  const upcoming = useMemo(
+    () => localEvents.filter((e) => e.endsAt >= now),
+    [localEvents, now]
+  );
+
+  const past = useMemo(
+    () =>
+      localEvents
+        .filter((e) => e.endsAt < now)
+        .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime()),
+    [localEvents, now]
+  );
+
+  const totalRSVPs = upcoming.reduce((s, e) => s + e.attendeeCount, 0);
+
+  const avgAttendance =
+    past.length > 0
+      ? Math.round(past.reduce((s, e) => s + e.attendeeCount, 0) / past.length)
+      : null;
+
+  const nextEvent = upcoming[0] ?? null;
+
+  async function handleDelete(id: string) {
+    await deleteEvent(id);
+    setLocalEvents((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  function handleCreate(e: ClubEvent) {
+    setLocalEvents((prev) =>
+      [...prev, e].sort(
+        (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+      )
+    );
+  }
+
+  function handleSave(updated: ClubEvent) {
+    setLocalEvents((prev) =>
+      prev
+        .map((e) => (e.id === updated.id ? updated : e))
+        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+    );
+  }
+
+  const rsvpEvent = rsvpEventId
+    ? localEvents.find((e) => e.id === rsvpEventId) ?? null
+    : null;
+
   return null;
 }
