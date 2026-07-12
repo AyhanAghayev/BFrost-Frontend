@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/stores/auth.store";
+import { updateProfile } from "@/lib/api/users";
+import { uploadImage } from "@/lib/api/upload";
+import {
+  PROFILE_BACKGROUNDS,
+  DEFAULT_BACKGROUND_ID,
+  resolveBackgroundStyle,
+} from "@/lib/profileBackgrounds";
 
 type Tab = "profile" | "account" | "notifications" | "appearance";
 
@@ -14,8 +21,61 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 export default function SettingsPageClient() {
-  const { currentUser } = useAuthStore();
+  const { currentUser, setCurrentUser } = useAuthStore();
   const [tab, setTab] = useState<Tab>("profile");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !currentUser) return;
+    setUploadingAvatar(true);
+    setSaveMsg(null);
+    try {
+      const url = await uploadImage("avatars", file);
+      const updated = await updateProfile(currentUser.id, { profilePictureUrl: url });
+      setCurrentUser(updated);
+      setSaveMsg({ ok: true, text: "Photo updated." });
+    } catch (err: unknown) {
+      setSaveMsg({ ok: false, text: err instanceof Error ? err.message : "Upload failed" });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  const [form, setForm] = useState({
+    displayName: currentUser?.displayName ?? "",
+    username: currentUser?.username ?? "",
+    bio: currentUser?.bio ?? "",
+    department: currentUser?.department ?? "",
+    university: currentUser?.university ?? "",
+    background: currentUser?.backgroundUrl ?? DEFAULT_BACKGROUND_ID,
+  });
+
+  async function handleSaveProfile() {
+    if (!currentUser) return;
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const updated = await updateProfile(currentUser.id, {
+        username: form.username.trim(),
+        displayName: form.displayName.trim(),
+        bio: form.bio.trim(),
+        university: form.university.trim(),
+        department: form.department.trim(),
+        backgroundUrl: form.background,
+      });
+      setCurrentUser(updated);
+      setSaveMsg({ ok: true, text: "Profile saved." });
+    } catch (err: unknown) {
+      setSaveMsg({ ok: false, text: err instanceof Error ? err.message : "Failed to save" });
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (!currentUser) return null;
 
@@ -84,8 +144,207 @@ export default function SettingsPageClient() {
         </nav>
 
         <div className="lg:col-span-9">
+          {tab === "profile" && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-gutter py-stack-md border-b border-border-subtle">
+                <h2 className="font-headline-md text-headline-md text-primary">
+                  Public profile
+                </h2>
+                <div className="flex items-center gap-3">
+                  {saveMsg && (
+                    <span className={cn("text-sm", saveMsg.ok ? "text-emerald-600" : "text-error")}>
+                      {saveMsg.text}
+                    </span>
+                  )}
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={saving}
+                    className="px-6 py-2 bg-primary text-white rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {saving ? "Saving…" : "Save changes"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-gutter space-y-stack-lg">
+                {/* Avatar row */}
+                <div className="flex items-center gap-gutter p-5 bg-surface-faint rounded-xl border border-border-subtle">
+                  <div className="relative flex-shrink-0">
+                    <img
+                      src={currentUser.avatarUrl}
+                      alt={currentUser.displayName}
+                      className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-sm"
+                    />
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={handleAvatarChange}
+                    />
+                    <button
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={uploadingAvatar}
+                      className="absolute -bottom-1 -right-1 w-7 h-7 bg-action-blue text-white rounded-full flex items-center justify-center border-2 border-white shadow hover:opacity-90 transition-opacity disabled:opacity-60"
+                    >
+                      <span
+                        className="material-symbols-outlined text-[14px]"
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                      >
+                        photo_camera
+                      </span>
+                    </button>
+                  </div>
+                  <div>
+                    <p className="font-label-md text-on-surface">Profile photo</p>
+                    <p className="text-sm text-on-surface-variant mt-0.5">
+                      {uploadingAvatar ? "Uploading…" : "PNG or JPG, at least 400×400px"}
+                    </p>
+                    <button
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="mt-2 text-sm text-action-blue hover:underline font-label-md"
+                    >
+                      Change photo
+                    </button>
+                  </div>
+                </div>
+
+                {/* Profile background */}
+                <div className="space-y-stack-md">
+                  <div>
+                    <p className="font-label-md text-on-surface">Profile background</p>
+                    <p className="text-sm text-on-surface-variant mt-0.5">
+                      Pick a banner color for your profile.
+                    </p>
+                  </div>
+                  {/* Live preview */}
+                  <div
+                    className="h-24 w-full rounded-xl border border-border-subtle"
+                    style={resolveBackgroundStyle(form.background)}
+                  />
+                  {/* Swatches */}
+                  <div className="flex flex-wrap gap-3">
+                    {PROFILE_BACKGROUNDS.map((bg) => {
+                      const selected = form.background === bg.id;
+                      return (
+                        <button
+                          key={bg.id}
+                          type="button"
+                          onClick={() => setForm((p) => ({ ...p, background: bg.id }))}
+                          title={bg.label}
+                          aria-label={bg.label}
+                          aria-pressed={selected}
+                          className={cn(
+                            "w-12 h-12 rounded-lg border-2 transition-all relative",
+                            selected
+                              ? "border-action-blue ring-2 ring-action-blue/30 scale-105"
+                              : "border-border-subtle hover:border-action-blue/40"
+                          )}
+                          style={bg.style}
+                        >
+                          {selected && (
+                            <span
+                              className="material-symbols-outlined absolute inset-0 m-auto w-fit h-fit text-white text-[18px] drop-shadow"
+                              style={{ fontVariationSettings: "'FILL' 1" }}
+                            >
+                              check
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+                  <Field label="Display name">
+                    <input
+                      type="text"
+                      value={form.displayName}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, displayName: e.target.value }))
+                      }
+                      className={inputCls}
+                    />
+                  </Field>
+
+                  <Field label="Username">
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm select-none">
+                        @
+                      </span>
+                      <input
+                        type="text"
+                        value={form.username}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, username: e.target.value }))
+                        }
+                        className={cn(inputCls, "pl-8")}
+                      />
+                    </div>
+                  </Field>
+
+                  <div className="md:col-span-2">
+                    <Field label="Bio">
+                      <textarea
+                        rows={3}
+                        value={form.bio}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, bio: e.target.value }))
+                        }
+                        className={cn(inputCls, "resize-none")}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field label="Department">
+                    <input
+                      type="text"
+                      value={form.department}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, department: e.target.value }))
+                      }
+                      className={inputCls}
+                    />
+                  </Field>
+
+                  <Field label="University">
+                    <input
+                      type="text"
+                      value={form.university}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, university: e.target.value }))
+                      }
+                      className={inputCls}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+const inputCls =
+  "w-full px-4 py-3 bg-surface-faint border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-action-blue transition-all";
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="font-label-md text-label-md text-on-surface-variant">
+        {label}
+      </label>
+      {children}
     </div>
   );
 }
