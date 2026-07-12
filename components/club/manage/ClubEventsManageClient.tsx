@@ -100,6 +100,156 @@ const FORMAT_META: Record<EventFormat, { label: string; cls: string; icon: strin
   hybrid: { label: "Hybrid", cls: "bg-purple-50 text-purple-700", icon: "sensors" },
 };
 
+// ── CreateEventModal ──────────────────────────────────────────────────────────
+
+interface CreateForm {
+  title: string;
+  format: EventFormat;
+  location: string;
+  startsAt: string;
+  endsAt: string;
+  capacity: string;
+  description: string;
+  coverImageUrl: string;
+}
+
+const emptyForm = (): CreateForm => ({
+  title: "",
+  format: "in-person",
+  location: "",
+  startsAt: "",
+  endsAt: "",
+  capacity: "",
+  description: "",
+  coverImageUrl: "",
+});
+
+const inputCls =
+  "w-full bg-surface-faint border border-border-subtle rounded-xl px-4 py-2.5 text-body-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-action-blue placeholder:text-on-surface-variant/60";
+
+function eventToForm(e: ClubEvent): CreateForm {
+  return {
+    title: e.title,
+    format: e.format,
+    location: e.location,
+    startsAt: toDatetimeLocal(e.startsAt),
+    endsAt: toDatetimeLocal(e.endsAt),
+    capacity: e.maxMembers != null ? String(e.maxMembers) : "",
+    description: e.description,
+    coverImageUrl: e.coverImageUrl ?? "",
+  };
+}
+
+function CreateEventModal({
+  clubId,
+  clubName,
+  currentUserId,
+  event,
+  onClose,
+  onCreate,
+  onSave,
+}: {
+  clubId: string;
+  clubName: string;
+  currentUserId: string;
+  event?: ClubEvent;
+  onClose: () => void;
+  onCreate: (e: ClubEvent) => void;
+  onSave?: (e: ClubEvent) => void;
+}) {
+  const isEdit = event != null;
+  const [form, setForm] = useState<CreateForm>(event ? eventToForm(event) : emptyForm());
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  async function handleCover(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingCover(true);
+    setError("");
+    try {
+      const url = await uploadImage("events", file);
+      setForm((f) => ({ ...f, coverImageUrl: url }));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Image upload failed");
+    } finally {
+      setUploadingCover(false);
+    }
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function set(field: keyof CreateForm, value: string) {
+    setForm((f) => ({ ...f, [field]: value }));
+    setError("");
+  }
+
+  const FORMAT_API = {
+    "in-person": "IN_PERSON",
+    online: "ONLINE",
+    hybrid: "HYBRID",
+  } as const;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.title.trim()) { setError("Title is required."); return; }
+    if (!form.location.trim()) { setError("Location is required."); return; }
+    if (!form.startsAt) { setError("Start date/time is required."); return; }
+    if (!form.endsAt) { setError("End date/time is required."); return; }
+    // Allow editing events that have already started; only enforce future start on create.
+    if (!isEdit && new Date(form.startsAt) <= new Date()) {
+      setError("Start must be in the future.");
+      return;
+    }
+    if (new Date(form.endsAt) <= new Date(form.startsAt)) {
+      setError("End must be after start.");
+      return;
+    }
+    const cap = form.capacity.trim();
+    if (cap && (!/^\d+$/.test(cap) || Number(cap) < 1)) {
+      setError("Capacity must be a whole number of at least 1.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    try {
+      const payload = {
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        format: FORMAT_API[form.format],
+        location: form.location.trim() || undefined,
+        startTime: new Date(form.startsAt).toISOString(),
+        endTime: new Date(form.endsAt).toISOString(),
+        maxMembers: cap ? Number(cap) : undefined,
+        coverImageUrl: form.coverImageUrl || undefined,
+      };
+      if (isEdit) {
+        const saved = await updateEvent(event.id, payload);
+        onSave?.(saved);
+      } else {
+        const created = await createEvent(clubId, payload);
+        onCreate(created);
+      }
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : `Failed to ${isEdit ? "save" : "create"} event`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return null;
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 function ManageForm({ club, events, currentUserId }: Props) {
