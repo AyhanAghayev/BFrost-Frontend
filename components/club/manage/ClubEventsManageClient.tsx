@@ -549,6 +549,171 @@ function RSVPsModal({
   );
 }
 
+// ── StatCard ─────────────────────────────────────────────────────────────────
+
+function StatCard({
+  label,
+  value,
+  sub,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  sub: string;
+  icon: string;
+}) {
+  return (
+    <div className="bg-white border border-border-subtle rounded-xl p-stack-md flex flex-col gap-2">
+      <span className="text-label-sm text-on-surface-variant uppercase tracking-wider">
+        {label}
+      </span>
+      <span className="text-3xl font-bold text-primary font-headline-md">{value}</span>
+      <div className="flex items-center gap-1.5 text-on-surface-variant text-body-sm mt-auto">
+        <span className="material-symbols-outlined text-[16px]">{icon}</span>
+        <span>{sub}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── EventRow ─────────────────────────────────────────────────────────────────
+
+function EventRow({
+  event,
+  onEdit,
+  onDelete,
+  onViewRSVPs,
+}: {
+  event: ClubEvent;
+  onEdit: (e: ClubEvent) => void;
+  onDelete: (id: string) => Promise<void>;
+  onViewRSVPs: (id: string) => void;
+}) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [delError, setDelError] = useState("");
+  const meta = FORMAT_META[event.format];
+
+  async function doDelete() {
+    setDeleting(true);
+    setDelError("");
+    try {
+      await onDelete(event.id);
+    } catch (err: unknown) {
+      setDelError(err instanceof Error ? err.message : "Failed to delete");
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="bg-white border border-border-subtle rounded-xl overflow-hidden group hover:border-action-blue/30 transition-colors">
+      <div className="flex flex-col md:flex-row md:items-center p-stack-md gap-stack-md">
+        {/* thumbnail */}
+        <div className="w-full md:w-40 h-24 rounded-lg overflow-hidden shrink-0 bg-surface-faint">
+          {event.coverImageUrl ? (
+            <img
+              src={event.coverImageUrl}
+              alt={event.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center" style={defaultEventCoverStyle(event.id)}>
+              <span className="material-symbols-outlined text-[32px] text-white/40">
+                event
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-stack-sm mb-1.5">
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase ${meta.cls}`}
+            >
+              <span className="material-symbols-outlined text-[12px]">{meta.icon}</span>
+              {meta.label}
+            </span>
+            <span className="text-on-surface-variant text-body-sm truncate">
+              {event.location}
+            </span>
+          </div>
+          <h3 className="font-label-md text-label-md text-on-surface truncate mb-1">
+            {event.title}
+          </h3>
+          {event.description && (
+            <p className="text-on-surface-variant text-body-sm line-clamp-1 mb-2">
+              {event.description}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-stack-md text-body-sm">
+            <span className="flex items-center gap-1.5 text-on-surface-variant">
+              <span className="material-symbols-outlined text-[16px] text-action-blue">
+                calendar_today
+              </span>
+              {fmtDateTime(event.startsAt)}
+            </span>
+            <span className="flex items-center gap-1.5 text-on-surface-variant">
+              <span className="material-symbols-outlined text-[16px] text-action-blue">
+                group
+              </span>
+              {event.attendeeCount} RSVPs
+            </span>
+          </div>
+        </div>
+
+        {/* actions */}
+        <div className="flex flex-row md:flex-col lg:flex-row gap-stack-sm shrink-0">
+          {confirmDelete ? (
+            <div className="flex items-center gap-stack-sm">
+              <span className="text-body-sm text-on-surface-variant">
+                {delError || "Delete?"}
+              </span>
+              <button
+                onClick={doDelete}
+                disabled={deleting}
+                className="px-3 py-1.5 bg-error text-white rounded-lg text-body-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {deleting ? "…" : "Yes"}
+              </button>
+              <button
+                onClick={() => { setConfirmDelete(false); setDelError(""); }}
+                disabled={deleting}
+                className="px-3 py-1.5 border border-border-subtle rounded-lg text-body-sm text-on-surface-variant hover:bg-surface-faint transition-colors disabled:opacity-50"
+              >
+                No
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={() => onEdit(event)}
+                className="flex-1 lg:flex-none border border-border-subtle px-4 py-2 rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-faint transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">edit</span>
+                Edit
+              </button>
+              <button
+                onClick={() => onViewRSVPs(event.id)}
+                className="flex-1 lg:flex-none bg-surface-faint border border-border-subtle px-4 py-2 rounded-lg font-label-md text-label-md text-on-surface hover:bg-border-subtle/40 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">group</span>
+                RSVPs
+              </button>
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="flex-none p-2 text-error hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <span className="material-symbols-outlined">delete</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 function ManageForm({ club, events, currentUserId }: Props) {
