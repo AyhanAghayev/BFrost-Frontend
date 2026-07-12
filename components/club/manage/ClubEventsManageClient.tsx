@@ -459,6 +459,96 @@ function CreateEventModal({
   );
 }
 
+// ── RSVPsModal ────────────────────────────────────────────────────────────────
+
+function RSVPsModal({
+  event,
+  onClose,
+}: {
+  event: ClubEvent;
+  onClose: () => void;
+}) {
+  const [attendees, setAttendees] = useState<EventAttendee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  useEffect(() => {
+    getEventAttendees(event.id)
+      .then(setAttendees)
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [event.id]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl border border-border-subtle w-full max-w-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-headline-md text-headline-md text-primary">RSVPs</h2>
+          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <p className="text-body-sm mb-1 line-clamp-1 font-medium text-on-surface">
+          {event.title}
+        </p>
+        <p className="text-body-sm text-on-surface-variant mb-5">{fmtDateShort(event.startsAt)}</p>
+
+        <div className="flex items-end gap-2 mb-4">
+          <span className="text-4xl font-bold text-primary font-headline-md">
+            {loading ? "—" : attendees.length}
+          </span>
+          <span className="text-on-surface-variant text-body-sm mb-1">
+            attendee{attendees.length === 1 ? "" : "s"} confirmed
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="py-8 flex justify-center">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : error ? (
+          <p className="text-error text-body-sm">{error}</p>
+        ) : attendees.length === 0 ? (
+          <p className="text-on-surface-variant text-body-sm py-4 text-center">
+            No RSVPs yet.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1 max-h-72 overflow-y-auto -mx-2">
+            {attendees.map((a) => (
+              <Link
+                key={a.userId}
+                href={`/profile/${a.username}`}
+                className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-faint transition-colors"
+              >
+                <img
+                  src={a.profilePictureUrl ?? `https://api.dicebear.com/9.x/avataaars/svg?seed=${a.username}`}
+                  alt={a.displayName}
+                  className="w-9 h-9 rounded-full object-cover shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="font-label-md text-label-md text-on-surface truncate">
+                    {a.displayName}
+                  </p>
+                  <p className="text-body-sm text-on-surface-variant truncate">
+                    @{a.username}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 function ManageForm({ club, events, currentUserId }: Props) {
