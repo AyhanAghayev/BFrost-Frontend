@@ -11,6 +11,7 @@ import { getClub, joinClub, leaveClub, getClubMembers, type ApiMember } from "@/
 import { getClubPosts, createPost } from "@/lib/api/posts";
 import { uploadImage } from "@/lib/api/upload";
 import { getClubEvents } from "@/lib/api/events";
+import { getClubWiki } from "@/lib/api/wiki";
 
 type TabType = "feed" | "resources" | "events" | "directory";
 
@@ -22,8 +23,8 @@ export default function ClubPageClient({ slug }: Props) {
   const [club, setClub] = useState<Club | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [events, setEvents] = useState<ClubEvent[]>([]);
-  const [articles] = useState<WikiArticle[]>([]);
-  const [featuredArticle] = useState<WikiArticle | undefined>(undefined);
+  const [articles, setArticles] = useState<WikiArticle[]>([]);
+  const featuredArticle = articles.find((a) => a.isFeatured);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabType>("feed");
   const [joined, setJoined] = useState(false);
@@ -38,14 +39,16 @@ export default function ClubPageClient({ slug }: Props) {
       getClub(slug),
       getClubPosts(slug),
       getClubEvents(slug),
+      getClubWiki(slug).catch(() => []),
     ])
-      .then(([clubData, postsPage, eventsData]) => {
+      .then(([clubData, postsPage, eventsData, wikiData]) => {
         setClub(clubData);
         setJoined(clubData.isMember);
         setRequested(clubData.hasPendingRequest ?? false);
         setMemberCount(clubData.memberCount);
         setPosts(postsPage.items);
         setEvents(eventsData);
+        setArticles(wikiData);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -74,6 +77,7 @@ export default function ClubPageClient({ slug }: Props) {
     setJoinError(null);
 
     if (joined) {
+      // optimistic leave
       setJoined(false);
       setMemberCount((prev) => prev - 1);
       try {
@@ -83,8 +87,10 @@ export default function ClubPageClient({ slug }: Props) {
         setMemberCount((prev) => prev + 1);
         setJoinError(err instanceof Error ? err.message : "Failed to leave");
       }
-      return;}
+      return;
+    }
 
+    // join — outcome depends on whether the club is public (member) or private (request)
     try {
       const result = await joinClub(club.id);
       if (result === "JOINED") {
@@ -95,12 +101,15 @@ export default function ClubPageClient({ slug }: Props) {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to join";
+      // A pending request isn't an error — show the pending state instead.
       if (/pending/i.test(msg)) setRequested(true);
       else setJoinError(msg);
-    }}
+    }
+  }
 
   return (
     <main className="flex-1 min-w-0 px-margin-mobile md:px-gutter py-gutter pb-20 lg:pb-gutter">
+      {/* Pending approval banner — only the owner can see a not-yet-approved club. */}
       {club.status === "PENDING" && (
         <div className="mb-gutter flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <span className="material-symbols-outlined text-amber-600 text-[20px]">hourglass_top</span>
@@ -110,14 +119,21 @@ export default function ClubPageClient({ slug }: Props) {
               Your club is only visible to you until an admin approves it. You&apos;ll be notified when it goes live.
             </p>
           </div>
-        </div>)}
+        </div>
+      )}
+
+      {/* ── Club header card ── */}
       <section className="bg-white border border-border-subtle rounded-xl overflow-hidden mb-gutter">
+        {/* Cover */}
         <div className="h-48 w-full bg-surface-container">
           <img
             src={club.coverImageUrl}
             alt={club.name}
-            className="w-full h-full object-cover"/>
+            className="w-full h-full object-cover"
+          />
         </div>
+
+        {/* Logo + actions row */}
         <div className="px-4 md:px-gutter pb-gutter relative">
           <div className="flex justify-between items-end -mt-8 md:-mt-10">
             <div className="bg-white p-1 rounded-xl shadow-sm border border-border-subtle">
@@ -125,13 +141,17 @@ export default function ClubPageClient({ slug }: Props) {
                 <img
                   src={club.logoUrl}
                   alt={club.name}
-                  className="w-16 h-16 md:w-24 md:h-24 rounded-lg object-cover"/>) : (
+                  className="w-16 h-16 md:w-24 md:h-24 rounded-lg object-cover"
+                />
+              ) : (
                 <div className="w-16 h-16 md:w-24 md:h-24 rounded-lg bg-primary flex items-center justify-center">
                   <span className="material-symbols-outlined text-white text-[32px] md:text-[48px]">
                     hub
                   </span>
-                </div>)}
+                </div>
+              )}
             </div>
+
             <div className="flex flex-col items-end gap-1.5 mb-2">
               <div className="flex gap-2">
                 {canManage ? (
@@ -149,26 +169,32 @@ export default function ClubPageClient({ slug }: Props) {
                     >
                       <span className="material-symbols-outlined text-[20px]">settings</span>
                     </Link>
-                  </>) : joined ? (
+                  </>
+                ) : joined ? (
                   <button
                     onClick={handleJoinToggle}
-                    className="border border-border-subtle text-on-surface-variant rounded-lg px-4 py-2.5 font-label-md text-label-md flex items-center gap-2 hover:bg-surface-container transition-colors">
+                    className="border border-border-subtle text-on-surface-variant rounded-lg px-4 py-2.5 font-label-md text-label-md flex items-center gap-2 hover:bg-surface-container transition-colors"
+                  >
                     <span
                       className="material-symbols-outlined text-[18px] text-primary"
-                      style={{ fontVariationSettings: "'FILL' 1" }}>
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
                       check_circle
                     </span>
                     <span className="hidden sm:inline">Member</span>
-                  </button>) : requested ? (
+                  </button>
+                ) : requested ? (
                   <div className="border border-amber-200 bg-amber-50 text-amber-700 rounded-lg px-4 py-2.5 font-label-md text-label-md flex items-center gap-2">
                     <span className="material-symbols-outlined text-[18px]">
                       schedule
                     </span>
                     <span>Request pending</span>
-                  </div>) : (
+                  </div>
+                ) : (
                   <button
                     onClick={handleJoinToggle}
-                    className="bg-primary text-white rounded-lg px-4 py-2.5 font-label-md text-label-md hover:opacity-90 transition-opacity">
+                    className="bg-primary text-white rounded-lg px-4 py-2.5 font-label-md text-label-md hover:opacity-90 transition-opacity"
+                  >
                     {club.isPublic ? "Join" : "Request to join"}
                   </button>
                 )}
@@ -178,6 +204,8 @@ export default function ClubPageClient({ slug }: Props) {
               )}
             </div>
           </div>
+
+          {/* Name + description + stats */}
           <div className="mt-3 md:mt-stack-md">
             <div className="flex items-center gap-stack-sm flex-wrap">
               <h1 className="font-headline-lg text-headline-lg text-primary">
@@ -186,11 +214,13 @@ export default function ClubPageClient({ slug }: Props) {
               {club.currentUserRole === "owner" && (
                 <span className="bg-primary text-white text-[10px] uppercase tracking-widest px-2 py-0.5 rounded font-bold">
                   Owner View
-                </span>)}
+                </span>
+              )}
               {club.currentUserRole === "moderator" && (
                 <span className="bg-action-blue text-white text-[10px] uppercase tracking-widest px-2 py-0.5 rounded font-bold">
                   Moderator
-                </span>)}
+                </span>
+              )}
             </div>
             <p className="mt-2 text-on-surface-variant leading-relaxed max-w-2xl">
               {club.description}
@@ -223,6 +253,8 @@ export default function ClubPageClient({ slug }: Props) {
             </div>
           </div>
         </div>
+
+        {/* Tab nav */}
         <div className="border-t border-border-subtle flex px-1 md:px-gutter overflow-x-auto scrollbar-hide">
           {(["feed", "resources", "events", "directory"] as const).map((t) => (
             <button
@@ -232,12 +264,16 @@ export default function ClubPageClient({ slug }: Props) {
                 "px-6 py-4 font-label-md text-label-md whitespace-nowrap capitalize transition-colors",
                 tab === t
                   ? "text-primary border-b-2 border-primary"
-                  : "text-on-surface-variant hover:text-primary")}>
-              {t.charAt(0).toUpperCase() + t.slice(1)}
+                  : "text-on-surface-variant hover:text-primary"
+              )}
+            >
+              {t === "resources" ? "Wiki" : t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
         </div>
       </section>
+
+      {/* ── Tab content ── */}
       {tab === "feed" && (
         <FeedTab
           club={club}
@@ -247,25 +283,32 @@ export default function ClubPageClient({ slug }: Props) {
           currentUser={currentUser}
           canPost={joined}
           onTabChange={setTab}
-          onPostCreated={(p) => setPosts((prev) => [p, ...prev])}/>)}
-      {tab === "resources" && <ResourcesTab articles={articles} />}
+          onPostCreated={(p) => setPosts((prev) => [p, ...prev])}
+        />
+      )}
+      {tab === "resources" && <ResourcesTab club={club} articles={articles} />}
       {tab === "events" && (
         <div className="flex flex-col gap-gutter">
           {canManage && (
             <div className="flex justify-end">
               <Link
                 href={`/clubs/${club.slug}/manage/events`}
-                className="inline-flex items-center gap-1.5 bg-primary text-white px-4 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity">
+                className="inline-flex items-center gap-1.5 bg-primary text-white px-4 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity"
+              >
                 <span className="material-symbols-outlined text-[18px]">edit_calendar</span>
                 Manage events
               </Link>
-            </div>)}
+            </div>
+          )}
           <EventsTab events={events} />
         </div>
       )}
       {tab === "directory" && <DirectoryTab club={club} />}
     </main>
-  );}
+  );
+}
+
+
 function FeedTab({
   club,
   posts,
@@ -274,7 +317,8 @@ function FeedTab({
   currentUser,
   canPost,
   onTabChange,
-  onPostCreated,}: {
+  onPostCreated,
+}: {
   club: Club;
   posts: Post[];
   featuredArticle: WikiArticle | undefined;
@@ -283,17 +327,22 @@ function FeedTab({
   canPost: boolean;
   onTabChange: (tab: TabType) => void;
   onPostCreated: (post: Post) => void;
-}) {return (
+}) {
+  return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+      {/* Left column */}
       <div className="md:col-span-8 flex flex-col gap-gutter">
         {canPost ? (
           <ClubPostCreator
             currentUser={currentUser}
             clubId={club.id}
-            onPostCreated={onPostCreated}/>) : (
+            onPostCreated={onPostCreated}
+          />
+        ) : (
           <div className="bg-white border border-border-subtle rounded-xl p-stack-md text-center text-sm text-on-surface-variant">
             Join this club to post in the feed.
-          </div>)}
+          </div>
+        )}
         {posts.length > 0 ? (
           posts.map((post) => <PostCard key={post.id} post={post} />)
         ) : (
@@ -302,20 +351,27 @@ function FeedTab({
           </div>
         )}
       </div>
+
+      {/* Right sidebar */}
       <aside className="hidden md:flex md:col-span-4 flex-col gap-gutter">
         {featuredArticle && <WikiSnippetCard article={featuredArticle} />}
         <ClubEventsCard
           events={events.slice(0, 2)}
-          onViewAll={() => onTabChange("events")}/>
+          onViewAll={() => onTabChange("events")}
+        />
         {(club.currentUserRole === "owner" ||
           club.currentUserRole === "moderator") &&
           club.moderationStats && (
             <ModerationStatsCard
               stats={club.moderationStats}
-              clubId={club.slug}/>
+              clubId={club.slug}
+            />
           )}
       </aside>
-    </div>);}
+    </div>
+  );
+}
+
 function ClubPostCreator({
   currentUser,
   clubId,
@@ -470,26 +526,24 @@ function WikiSnippetCard({ article }: { article: WikiArticle }) {
         <p className="text-label-sm text-on-surface-variant line-clamp-3 leading-relaxed">
           {article.summary}
         </p>
-        <a
-          href="#"
+        <Link
+          href={`/clubs/${article.clubSlug}/wiki/${article.id}`}
           className="text-action-blue text-sm font-label-md hover:underline mt-3 flex items-center gap-1"
         >
           View Full Article
           <span className="material-symbols-outlined text-[16px]">
             arrow_forward
           </span>
-        </a>
+        </Link>
       </div>
       <div className="mt-4 pt-4 border-t border-border-subtle flex items-center justify-between">
-        <div className="flex -space-x-2">
-          {article.contributorAvatarUrls.slice(0, 3).map((url, i) => (
-            <img
-              key={i}
-              src={url}
-              alt="contributor"
-              className="w-7 h-7 rounded-full border-2 border-white object-cover"
-            />
-          ))}
+        <div className="flex items-center gap-2">
+          <img
+            src={article.author.avatarUrl}
+            alt={article.author.displayName}
+            className="w-7 h-7 rounded-full object-cover"
+          />
+          <span className="text-label-sm text-on-surface-variant">{article.author.displayName}</span>
         </div>
         <span className="text-label-sm text-on-surface-variant">
           Updated {formatRelativeTime(article.updatedAt)}
@@ -620,49 +674,64 @@ function ModerationStatsCard({
   );
 }
 
-function ResourcesTab({ articles }: { articles: WikiArticle[] }) {
-  if (articles.length === 0) {
-    return (
-      <div className="bg-white border border-border-subtle rounded-xl p-gutter text-center text-on-surface-variant">
-        No articles yet.
-      </div>
-    );
-  }
+
+function ResourcesTab({ club, articles }: { club: Club; articles: WikiArticle[] }) {
+  const canManage = club.currentUserRole === "owner" || club.currentUserRole === "moderator";
 
   return (
     <div className="flex flex-col gap-gutter">
-      {articles.map((article) => (
-        <article
-          key={article.id}
-          className="bg-white border border-border-subtle rounded-xl p-gutter hover:shadow-sm transition-shadow cursor-pointer"
-        >
-          <div className="flex justify-between items-start gap-4">
-            <div className="flex-1 min-w-0">
-              <h2 className="font-headline-md text-headline-md text-primary mb-2">
-                {article.title}
-              </h2>
-              <p className="text-on-surface-variant leading-relaxed line-clamp-3 mb-4">
-                {article.summary}
-              </p>
-              <div className="flex items-center gap-3 text-label-sm text-on-surface-variant">
-                <img
-                  src={article.author.avatarUrl}
-                  alt={article.author.displayName}
-                  className="w-6 h-6 rounded-full object-cover"
-                />
-                <span>{article.author.displayName}</span>
-                <span>•</span>
-                <span>Updated {formatRelativeTime(article.updatedAt)}</span>
+      <div className="flex items-center justify-between">
+        <h2 className="font-headline-md text-headline-md text-primary">Wiki</h2>
+        {canManage && (
+          <Link
+            href={`/clubs/${club.slug}/wiki/new`}
+            className="inline-flex items-center gap-1.5 bg-primary text-white px-4 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            New article
+          </Link>
+        )}
+      </div>
+
+      {articles.length === 0 ? (
+        <div className="bg-white border border-border-subtle rounded-xl p-gutter text-center text-on-surface-variant">
+          {canManage ? "No articles yet — create the first one." : "No articles yet."}
+        </div>
+      ) : (
+        articles.map((article) => (
+          <Link
+            key={article.id}
+            href={`/clubs/${club.slug}/wiki/${article.id}`}
+            className="block bg-white border border-border-subtle rounded-xl p-gutter hover:shadow-sm transition-shadow"
+          >
+            <div className="flex justify-between items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-headline-md text-headline-md text-primary mb-2">
+                  {article.title}
+                </h3>
+                <p className="text-on-surface-variant leading-relaxed line-clamp-3 mb-4">
+                  {article.summary}
+                </p>
+                <div className="flex items-center gap-3 text-label-sm text-on-surface-variant">
+                  <img
+                    src={article.author.avatarUrl}
+                    alt={article.author.displayName}
+                    className="w-6 h-6 rounded-full object-cover"
+                  />
+                  <span>{article.author.displayName}</span>
+                  <span>•</span>
+                  <span>Updated {formatRelativeTime(article.updatedAt)}</span>
+                </div>
               </div>
+              {article.isFeatured && (
+                <span className="flex-shrink-0 bg-primary text-white text-[10px] uppercase tracking-widest px-2 py-1 rounded font-bold">
+                  Featured
+                </span>
+              )}
             </div>
-            {article.isFeatured && (
-              <span className="flex-shrink-0 bg-primary text-white text-[10px] uppercase tracking-widest px-2 py-1 rounded font-bold">
-                Featured
-              </span>
-            )}
-          </div>
-        </article>
-      ))}
+          </Link>
+        ))
+      )}
     </div>
   );
 }
