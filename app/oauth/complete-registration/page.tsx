@@ -281,3 +281,172 @@ function CompleteRegistrationForm() {
     </form>
   );
 }
+
+
+
+export default function CompleteRegistrationPage() {
+  return (
+    <main className="min-h-screen flex flex-col md:flex-row">
+
+      <section
+        className="
+          relative hidden md:flex md:w-5/12 lg:w-1/2
+          flex-col justify-between p-12 overflow-hidden
+        "
+        style={{ backgroundColor: "#001B3D" }}
+      >
+
+        <div
+          className="absolute top-0 right-0 w-[520px] h-[520px] rounded-full blur-3xl pointer-events-none"
+          style={{
+            background: "rgba(46,91,255,0.18)",
+            transform: "translate(40%, -40%)"
+          }}
+        />
+
+        <div className="relative z-10">
+          <span className="font-headline-md text-headline-md font-black text-white">
+            BFrost
+          </span>
+        </div>
+
+
+        <div className="relative z-10 flex flex-col gap-6">
+
+          <h1
+            className="text-white leading-tight"
+            style={{
+              fontFamily: "var(--font-manrope)",
+              fontSize: "clamp(32px, 3.5vw, 48px)",
+              fontWeight: 800,
+            }}
+          >
+            Welcome to{" "}
+            <span style={{color:"rgba(173,198,255,0.9)"}}>
+              BFrost.
+            </span>
+          </h1>
+
+
+          <p
+            className="text-body-md leading-relaxed max-w-sm"
+            style={{
+              color:"rgba(255,255,255,0.65)"
+            }}
+          >
+            Create your password and start discovering clubs,
+            events, and students at your university.
+          </p>
+
+
+          <div
+            className="flex items-center gap-4 rounded-xl p-4"
+            style={{
+              background:"rgba(255,255,255,0.06)",
+              border:"1px solid rgba(255,255,255,0.1)",
+              backdropFilter:"blur(12px)"
+            }}
+          >
+
+            <div className="flex -space-x-3">
+              {AVATARS.map((src,i)=>(
+                <img
+                  key={i}
+                  src={src}
+                  className="w-10 h-10 rounded-full"
+                  style={{
+                    border:"2px solid #001B3D"
+                  }}
+                  alt="Member"
+                />
+              ))}
+            </div>
+
+
+            <p
+              className="font-label-md text-label-md"
+              style={{
+                color:"rgba(255,255,255,0.8)"
+              }}
+            >
+              Joined by{" "}
+              <span className="font-bold text-white">
+                2,000+ students
+              </span>
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <div
+  className="relative z-10 flex gap-5"
+  style={{
+    color: "rgba(255,255,255,0.3)"
+  }}
+>
+  <a
+    href="#"
+    className="text-label-sm hover:text-white/60 transition-colors"
+  >
+    Privacy
+  </a>
+
+  <a
+    href="#"
+    className="text-label-sm hover:text-white/60 transition-colors"
+  >
+    Terms
+  </a>
+
+  <a
+    href="#"
+    className="text-label-sm hover:text-white/60 transition-colors"
+  >
+    Help
+  </a>
+</div>
+
+
+      </section>
+
+
+      <section className="
+        flex-1 flex flex-col justify-center
+        items-center px-6 py-12 md:px-16 bg-white
+      ">
+
+        <div className="md:hidden mb-10 w-full max-w-md">
+          <span className="font-headline-md text-headline-md font-black text-primary">
+            BFrost
+          </span>
+        </div>
+
+
+        <div className="w-full max-w-md flex flex-col gap-8">
+
+          <div>
+            <h2 className="font-headline-md text-headline-md text-primary mb-1">
+              Almost there
+            </h2>
+
+            <p className="text-body-sm text-on-surface-variant">
+              Set a password to finish creating your BFrost account.
+            </p>
+          </div>
+
+
+          <Suspense fallback={null}>
+            <CompleteRegistrationForm />
+          </Suspense>
+
+
+        </div>
+
+      </section>
+
+
+    </main>
+  );
+}
