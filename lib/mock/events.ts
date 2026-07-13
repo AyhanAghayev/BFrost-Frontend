@@ -1,5 +1,15 @@
 import type { ClubEvent } from "@/lib/types";
 
+// Anchor mock events to the current date so the demo always has a realistic
+// mix of past and upcoming events
+function eventDates(daysFromNow: number, startHour: number, durationHours: number) {
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() + daysFromNow);
+  start.setUTCHours(startHour, 0, 0, 0);
+  const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+  return { startsAt: start.toISOString(), endsAt: end.toISOString() };
+}
+
 export const MOCK_EVENTS: ClubEvent[] = [
   {
     id: "e-007",
@@ -11,8 +21,7 @@ export const MOCK_EVENTS: ClubEvent[] = [
     coverImageUrl: "https://picsum.photos/seed/arduino/800/400",
     format: "in-person",
     location: "Engineering Building, Lab 3",
-    startsAt: "2026-04-10T10:00:00Z",
-    endsAt: "2026-04-10T13:00:00Z",
+    ...eventDates(-14, 10, 3),
     maxMembers: null,
     attendeeCount: 28,
     waitlistCount: 0,
@@ -31,8 +40,7 @@ export const MOCK_EVENTS: ClubEvent[] = [
     coverImageUrl: "https://picsum.photos/seed/aiethics/800/400",
     format: "hybrid",
     location: "Main Hall + Zoom",
-    startsAt: "2026-05-20T15:00:00Z",
-    endsAt: "2026-05-20T17:30:00Z",
+    ...eventDates(-5, 15, 2.5),
     maxMembers: null,
     attendeeCount: 52,
     waitlistCount: 0,
@@ -52,8 +60,7 @@ export const MOCK_EVENTS: ClubEvent[] = [
     coverImageUrl: "https://picsum.photos/seed/ros/800/400",
     format: "in-person",
     location: "Engineering Building, Lab 3",
-    startsAt: "2026-06-14T10:00:00Z",
-    endsAt: "2026-06-14T13:00:00Z",
+    ...eventDates(1, 10, 3),
     maxMembers: null,
     attendeeCount: 34,
     waitlistCount: 0,
@@ -73,8 +80,7 @@ export const MOCK_EVENTS: ClubEvent[] = [
     coverImageUrl: "https://picsum.photos/seed/pitch/800/400",
     format: "in-person",
     location: "Main Auditorium, Block A",
-    startsAt: "2026-06-17T17:00:00Z",
-    endsAt: "2026-06-17T20:00:00Z",
+    ...eventDates(2, 17, 3),
     maxMembers: null,
     attendeeCount: 112,
     waitlistCount: 0,
@@ -94,8 +100,7 @@ export const MOCK_EVENTS: ClubEvent[] = [
     coverImageUrl: "https://picsum.photos/seed/cleanup/800/400",
     format: "in-person",
     location: "National Park, East Gate",
-    startsAt: "2026-06-22T08:00:00Z",
-    endsAt: "2026-06-22T12:00:00Z",
+    ...eventDates(3, 8, 4),
     maxMembers: null,
     attendeeCount: 67,
     waitlistCount: 0,
@@ -115,8 +120,7 @@ export const MOCK_EVENTS: ClubEvent[] = [
     coverImageUrl: "https://picsum.photos/seed/gamejam/800/400",
     format: "hybrid",
     location: "Computer Lab 7 + Discord",
-    startsAt: "2026-07-04T18:00:00Z",
-    endsAt: "2026-07-06T18:00:00Z",
+    ...eventDates(8, 18, 48),
     maxMembers: null,
     attendeeCount: 41,
     waitlistCount: 0,
@@ -136,8 +140,7 @@ export const MOCK_EVENTS: ClubEvent[] = [
     coverImageUrl: "https://picsum.photos/seed/portrait/800/400",
     format: "online",
     location: "Zoom (link sent to members)",
-    startsAt: "2026-06-25T14:00:00Z",
-    endsAt: "2026-06-25T16:00:00Z",
+    ...eventDates(5, 14, 2),
     maxMembers: null,
     attendeeCount: 88,
     waitlistCount: 0,
@@ -157,8 +160,7 @@ export const MOCK_EVENTS: ClubEvent[] = [
     coverImageUrl: "https://picsum.photos/seed/chess-tournament/800/400",
     format: "in-person",
     location: "Student Union, Room 204",
-    startsAt: "2026-07-10T09:00:00Z",
-    endsAt: "2026-07-10T18:00:00Z",
+    ...eventDates(12, 9, 9),
     maxMembers: null,
     attendeeCount: 30,
     waitlistCount: 0,
