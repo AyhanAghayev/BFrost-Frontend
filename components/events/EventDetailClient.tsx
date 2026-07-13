@@ -4,10 +4,12 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { ClubEvent, Club } from "@/lib/types";
-import { getEvent, rsvpEvent } from "@/lib/api/events";
+import { getEvent, rsvpEvent, type RsvpStatus } from "@/lib/api/events";
 import { getClub } from "@/lib/api/clubs";
 import { getClubEvents } from "@/lib/api/events";
 import { defaultEventCoverStyle } from "@/lib/eventCover";
+import { downloadEventIcs } from "@/lib/ics";
+import RsvpFormModal from "./RsvpFormModal";
 
 const FORMAT_META: Record<string, { icon: string; label: string; color: string; bg: string }> = {
   "in-person": { icon: "location_on",  label: "In person",  color: "text-emerald-700", bg: "bg-emerald-50" },
@@ -31,15 +33,19 @@ export default function EventDetailClient({ eventId }: Props) {
   const [club, setClub] = useState<Club | null>(null);
   const [relatedEvents, setRelatedEvents] = useState<ClubEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [attending, setAttending] = useState(false);
+  const [rsvpStatus, setRsvpStatus] = useState<RsvpStatus | null>(null);
   const [count, setCount] = useState(0);
+  const [showForm, setShowForm] = useState(false);
+
+  const attending = rsvpStatus === "ATTENDING";
+  const waitlisted = rsvpStatus === "WAITLISTED";
 
   useEffect(() => {
     setLoading(true);
     getEvent(eventId)
       .then(async (ev) => {
         setEvent(ev);
-        setAttending(ev.isAttending);
+        setRsvpStatus(ev.myRsvpStatus);
         setCount(ev.attendeeCount);
         const [clubData, related] = await Promise.all([
           getClub(ev.clubSlug),
@@ -67,13 +73,33 @@ export default function EventDetailClient({ eventId }: Props) {
   }
 
   function toggleAttend() {
-    const wasAttending = attending;
-    setCount((c) => (wasAttending ? c - 1 : c + 1));
-    setAttending((a) => !a);
-    rsvpEvent(event!.id, wasAttending ? "NOT_ATTENDING" : "ATTENDING").catch(() => {
-      setCount((c) => (wasAttending ? c + 1 : c - 1));
-      setAttending(wasAttending);
-    });
+    if (!event) return;
+    // Currently registered → cancel.
+    if (rsvpStatus === "ATTENDING" || rsvpStatus === "WAITLISTED") {
+      const wasAttending = rsvpStatus === "ATTENDING";
+      setRsvpStatus("NOT_ATTENDING");
+      if (wasAttending) setCount((c) => c - 1);
+      rsvpEvent(event.id, "NOT_ATTENDING").catch(() => {
+        setRsvpStatus(wasAttending ? "ATTENDING" : "WAITLISTED");
+        if (wasAttending) setCount((c) => c + 1);
+      });
+      return;
+    }
+    // Not registered → collect form answers first if the event has any.
+    if (event.questions.length > 0) {
+      setShowForm(true);
+      return;
+    }
+    rsvpEvent(event.id, "ATTENDING").then((status) => {
+      setRsvpStatus(status);
+      if (status === "ATTENDING") setCount((c) => c + 1);
+    }).catch(() => {});
+  }
+
+  function onRsvpFormDone(status: RsvpStatus) {
+    setShowForm(false);
+    setRsvpStatus(status);
+    if (status === "ATTENDING") setCount((c) => c + 1);
   }
 
   const facepile: Array<{ id: string; displayName: string; avatarUrl: string }> = [];
@@ -83,6 +109,9 @@ export default function EventDetailClient({ eventId }: Props) {
 
   return (
     <div className="flex-1 min-w-0 min-h-screen bg-surface-faint">
+      {showForm && (
+        <RsvpFormModal event={event} onClose={() => setShowForm(false)} onDone={onRsvpFormDone} />
+      )}
       <div className="w-full aspect-[5/2] md:aspect-[3/1] overflow-hidden bg-surface-container">
         {event.coverImageUrl ? (
           <img
@@ -180,13 +209,15 @@ export default function EventDetailClient({ eventId }: Props) {
 
                 {/* RSVP buttons */}
                 {!isPast ? (
-                  <div className="flex gap-stack-sm flex-wrap">
+                  <div className="flex gap-stack-sm flex-wrap items-center">
                     <button
                       onClick={toggleAttend}
                       className={cn(
                         "flex items-center gap-2 px-6 py-2.5 rounded-lg font-label-md text-label-md transition-all active:scale-95",
                         attending
                           ? "bg-primary text-white hover:opacity-90"
+                          : waitlisted
+                          ? "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
                           : "border-2 border-primary text-primary hover:bg-primary/5"
                       )}
                     >
@@ -194,18 +225,25 @@ export default function EventDetailClient({ eventId }: Props) {
                         className="material-symbols-outlined text-[18px]"
                         style={attending ? { fontVariationSettings: "'FILL' 1" } : undefined}
                       >
-                        {attending ? "check_circle" : "add_circle"}
+                        {attending ? "check_circle" : waitlisted ? "hourglass_top" : "add_circle"}
                       </span>
-                      {attending ? "Going" : "RSVP"}
+                      {attending ? "Going" : waitlisted ? "On waitlist" : "RSVP"}
                     </button>
-                    {attending && (
+                    {(attending || waitlisted) && (
                       <button
                         onClick={toggleAttend}
                         className="px-4 py-2.5 rounded-lg font-label-md text-label-md text-on-surface-variant border border-border-subtle hover:bg-surface-container transition-colors"
                       >
-                        Can't make it
+                        {waitlisted ? "Leave waitlist" : "Can't make it"}
                       </button>
                     )}
+                    <button
+                      onClick={() => downloadEventIcs(event)}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg font-label-md text-label-md text-on-surface-variant border border-border-subtle hover:bg-surface-container transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">calendar_add_on</span>
+                      Add to calendar
+                    </button>
                   </div>
                 ) : (
                   <span className="text-sm text-on-surface-variant italic">This event has ended.</span>
