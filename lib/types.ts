@@ -112,14 +112,16 @@ export interface ClubEvent {
 export interface WikiArticle {
   id: string;
   clubId: string;
+  clubSlug: string;
+  clubName: string;
   title: string;
   summary: string;
   body: string;
   authorId: string;
-  author: Pick<User, "id" | "displayName" | "avatarUrl">;
+  author: Pick<User, "id" | "displayName" | "avatarUrl" | "username">;
   updatedAt: string;
-  contributorAvatarUrls: string[];
   isFeatured: boolean;
+  canManage: boolean;
 }
 
 export interface MemberEntry {
