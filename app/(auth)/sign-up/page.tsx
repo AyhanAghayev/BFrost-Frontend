@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { register, getMe } from "@/lib/api/auth";
+import { BASE } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/stores/auth.store";
 
 const AVATARS = [
@@ -211,6 +212,7 @@ export default function SignUpPage() {
 
           <button
             type="button"
+            onClick={() => { window.location.href = `${BASE}/oauth2/authorization/google`; }}
             className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-border-subtle rounded-xl font-label-md text-label-md text-on-surface hover:bg-surface-faint active:scale-[0.99] transition-all"
           >
             <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none">
