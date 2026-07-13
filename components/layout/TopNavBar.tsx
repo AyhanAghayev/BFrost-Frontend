@@ -5,14 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/stores/auth.store";
+import { getUnreadCount, getNotifications, markAllRead } from "@/lib/api/notifications";
 import { logout } from "@/lib/api/auth";
+import { getChatUnreadCount } from "@/lib/api/conversations";
 import { formatRelativeTime } from "@/lib/utils/format";
 import type { Notification } from "@/lib/types";
-
-function getUnreadCount() { return Promise.resolve(0); }
-function getNotifications() { return Promise.resolve([]); }
-function markAllRead() { return Promise.resolve(); }
-function getChatUnreadCount() { return Promise.resolve(0); }
 
 function NavItem({
   href,
@@ -55,7 +52,7 @@ export default function TopNavBar() {
   useEffect(() => {
     getUnreadCount()
       .then(setUnreadCount)
-      .catch(() => {});
+      .catch(() => {}); // silently ignore if not authenticated yet
   }, []);
 
   useEffect(() => {
@@ -105,7 +102,7 @@ export default function TopNavBar() {
   }
 
   async function handleSignOut() {
-    try { await logout(); } catch { }
+    try { await logout(); } catch { /* ignore */ }
     clearAuth();
     router.push("/sign-in");
   }
@@ -127,7 +124,7 @@ export default function TopNavBar() {
           </Link>
           <nav className="hidden md:flex items-center gap-stack-md">
             <NavItem href="/discover" label="Discover" active={pathname === "/discover"} />
-            <NavItem href="/discover" label="Wiki" active={false} />
+            <NavItem href="/wiki" label="Wiki" active={pathname.startsWith("/wiki")} />
             <NavItem href="/events" label="Events" active={pathname === "/events"} />
           </nav>
         </div>

@@ -9,6 +9,7 @@ import PostCard from "@/components/feed/PostCard";
 import { useAuthStore } from "@/lib/stores/auth.store";
 import { getUserProfile, followUser, unfollowUser, getFollowers, getFollowing } from "@/lib/api/users";
 import { getUserPosts, getSavedPosts } from "@/lib/api/posts";
+import { getUserWiki } from "@/lib/api/wiki";
 import { resolveBackgroundStyle } from "@/lib/profileBackgrounds";
 
 type Tab = "posts" | "media" | "wiki" | "saved";
@@ -47,7 +48,7 @@ export default function ProfilePageClient({ username }: Props) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [savedPosts, setSavedPosts] = useState<Post[]>([]);
   const [savedLoading, setSavedLoading] = useState(true);
-  const [articles] = useState<WikiArticle[]>([]);
+  const [articles, setArticles] = useState<WikiArticle[]>([]);
   const [clubEntries] = useState<ClubEntry[]>([]);
   const [mutualUsers] = useState<MutualUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +79,7 @@ export default function ProfilePageClient({ username }: Props) {
         setFollowerCount(profileUser.followerCount);
         const postsPage = await getUserPosts(profileUser.id);
         setPosts(postsPage.items);
+        getUserWiki(profileUser.id).then(setArticles).catch(() => setArticles([]));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -121,21 +123,16 @@ export default function ProfilePageClient({ username }: Props) {
 
   return (
     <div className="flex-1 min-w-0 min-h-screen bg-surface-faint">
-      
       <div
         className="h-48 md:h-64 w-full"
         style={resolveBackgroundStyle(user.backgroundUrl)}
       />
-
-      
       <div className="px-margin-mobile md:px-gutter -mt-16 relative z-10 pb-6 border-b border-border-subtle">
-        
         <div className="flex items-end justify-between gap-3">
           <div className="w-24 h-24 md:w-32 md:h-32 rounded-xl border-4 border-white shadow-md overflow-hidden flex-shrink-0 bg-white">
             <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
           </div>
 
-          
           <div className="flex gap-2 pb-1 self-end">
             {isOwnProfile ? (
               <Link
@@ -170,7 +167,7 @@ export default function ProfilePageClient({ username }: Props) {
           </div>
         </div>
 
-      
+        {/* Row 2: name, handle, stats */}
         <div className="mt-3">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold text-primary leading-tight">{user.displayName}</h1>
@@ -208,10 +205,12 @@ export default function ProfilePageClient({ username }: Props) {
         </div>
       </div>
 
-      
+      {/* ── Dashboard grid ── */}
       <div className="px-margin-mobile md:px-gutter py-gutter">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">  
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+          {/* ── Left sidebar ── */}
           <aside className="lg:col-span-3 flex flex-col gap-gutter">
+            {/* About */}
             <section className="bg-white border border-border-subtle rounded-xl p-stack-md shadow-sm">
               <h3 className="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-4">
                 About
@@ -241,7 +240,6 @@ export default function ProfilePageClient({ username }: Props) {
               </div>
             </section>
 
-            
             {!isOwnProfile && mutualUsers.length > 0 && (
               <section className="bg-primary-container rounded-xl p-stack-md shadow-sm">
                 <h3 className="font-label-md text-label-md uppercase tracking-wider text-on-primary-container/70 mb-4">
@@ -279,7 +277,6 @@ export default function ProfilePageClient({ username }: Props) {
               </section>
             )}
 
-            
             {clubEntries.length > 0 && (
               <section className="bg-white border border-border-subtle rounded-xl p-stack-md shadow-sm">
                 <h3 className="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-4">
@@ -317,9 +314,7 @@ export default function ProfilePageClient({ username }: Props) {
             )}
           </aside>
 
-          
           <div className="lg:col-span-9">
-            
             <div className="flex border-b border-border-subtle mb-gutter bg-white rounded-t-xl overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {(["posts", "media", "wiki", "saved"] as const).map((t) => (
                 <button
@@ -333,13 +328,12 @@ export default function ProfilePageClient({ username }: Props) {
                   )}
                 >
                   {t === "wiki"
-                    ? "Wiki Edits"
+                    ? "Wiki"
                     : t.charAt(0).toUpperCase() + t.slice(1)}
                 </button>
               ))}
             </div>
 
-          
             {tab === "posts" && (
               posts.length > 0 ? (
                 <div className="flex flex-col gap-gutter">
@@ -403,7 +397,6 @@ export default function ProfilePageClient({ username }: Props) {
           </div>
         </div>
       </div>
-
 
       {listModal && (
         <div
@@ -482,7 +475,10 @@ function EmptyState({ icon, message }: { icon: string; message: string }) {
 
 function WikiArticleRow({ article }: { article: WikiArticle }) {
   return (
-    <article className="bg-white border border-border-subtle rounded-xl p-gutter hover:shadow-sm transition-shadow">
+    <Link
+      href={`/clubs/${article.clubSlug}/wiki/${article.id}`}
+      className="block bg-white border border-border-subtle rounded-xl p-gutter hover:shadow-sm transition-shadow"
+    >
       <div className="flex justify-between items-start gap-4">
         <div className="min-w-0">
           <h3 className="font-label-md text-label-md text-primary mb-1 truncate">
@@ -500,23 +496,14 @@ function WikiArticleRow({ article }: { article: WikiArticle }) {
       </div>
       <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border-subtle text-label-sm text-on-surface-variant">
         <span className="flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-[14px]">group</span>
+          {article.clubName}
+        </span>
+        <span className="flex items-center gap-1.5">
           <span className="material-symbols-outlined text-[14px]">edit</span>
           Updated {formatRelativeTime(article.updatedAt)}
         </span>
-        <span className="flex items-center gap-1.5">
-          <div className="flex -space-x-1.5">
-            {article.contributorAvatarUrls.slice(0, 3).map((url, i) => (
-              <img
-                key={i}
-                src={url}
-                alt=""
-                className="w-5 h-5 rounded-full border border-white object-cover"
-              />
-            ))}
-          </div>
-          <span>{article.contributorAvatarUrls.length} contributor{article.contributorAvatarUrls.length !== 1 ? "s" : ""}</span>
-        </span>
       </div>
-    </article>
+    </Link>
   );
 }
