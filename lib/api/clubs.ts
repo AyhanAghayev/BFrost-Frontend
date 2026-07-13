@@ -15,6 +15,7 @@ export interface ApiClub {
   logoUrl: string | null;
   tags: string[];
   memberCount: number;
+  articleCount: number;
   isMember: boolean;
   memberRole: "OWNER" | "MODERATOR" | "MEMBER" | null;
   hasPendingRequest: boolean;
@@ -50,7 +51,7 @@ export function mapClub(c: ApiClub): Club {
     university: "",
     memberCount: c.memberCount,
     eventCount: 0,
-    articleCount: 0,
+    articleCount: c.articleCount,
     isPublic: c.isPublic,
     status: c.status,
     currentUserRole: mapRole(c.memberRole),
