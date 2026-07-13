@@ -1,6 +1,6 @@
 import { useAuthStore } from "@/lib/stores/auth.store";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+export const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 export class ApiError extends Error {
   constructor(
