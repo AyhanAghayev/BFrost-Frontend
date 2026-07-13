@@ -1,7 +1,14 @@
 import { api } from "./client";
-import type { ClubEvent } from "@/lib/types";
+import type { ClubEvent, EventQuestion, QuestionType } from "@/lib/types";
 
-// ── Backend response shape ────────────────────────────────────────────────────
+interface ApiQuestion {
+  id: string;
+  label: string;
+  type: QuestionType;
+  required: boolean;
+  position: number;
+  options: string[];
+}
 
 export interface ApiEvent {
   id: string;
@@ -18,11 +25,24 @@ export interface ApiEvent {
   maxMembers: number | null;
   createdBy: string;
   attendingCount: number;
-  currentUserRsvp: "ATTENDING" | "NOT_ATTENDING" | null;
+  waitlistCount: number;
+  currentUserRsvp: "ATTENDING" | "NOT_ATTENDING" | "WAITLISTED" | null;
+  questions: ApiQuestion[];
   createdAt: string;
 }
 
-// ── Mapper ────────────────────────────────────────────────────────────────────
+// A question in a create/edit payload (no id — the server rebuilds them).
+export interface QuestionInput {
+  label: string;
+  type: QuestionType;
+  required: boolean;
+  options?: string[];
+}
+
+export interface AnswerInput {
+  questionId: string;
+  value: string;
+}
 
 export function mapEvent(e: ApiEvent): ClubEvent {
   return {
@@ -39,7 +59,10 @@ export function mapEvent(e: ApiEvent): ClubEvent {
     endsAt: e.endTime ?? e.startTime,
     maxMembers: e.maxMembers,
     attendeeCount: e.attendingCount,
+    waitlistCount: e.waitlistCount,
     isAttending: e.currentUserRsvp === "ATTENDING",
+    myRsvpStatus: e.currentUserRsvp,
+    questions: e.questions as EventQuestion[],
     organizerId: e.createdBy,
   };
 }
@@ -62,25 +85,19 @@ export async function getEvent(eventId: string): Promise<ClubEvent> {
   return mapEvent(e);
 }
 
-export async function rsvpEvent(eventId: string, status: "ATTENDING" | "NOT_ATTENDING"): Promise<void> {
-  return api.post<void>(`/api/v1/events/${eventId}/rsvp?status=${status}`);
+export type RsvpStatus = "ATTENDING" | "NOT_ATTENDING" | "WAITLISTED";
+
+// Returns the effective status (ATTENDING may come back WAITLISTED if the event is full).
+export async function rsvpEvent(
+  eventId: string,
+  status: "ATTENDING" | "NOT_ATTENDING",
+  answers: AnswerInput[] = []
+): Promise<RsvpStatus> {
+  const res = await api.post<{ status: RsvpStatus }>(`/api/v1/events/${eventId}/rsvp`, { status, answers });
+  return res.status;
 }
 
-export async function createEvent(clubId: string, payload: {
-  title: string;
-  description?: string;
-  format: "IN_PERSON" | "ONLINE" | "HYBRID";
-  location?: string;
-  startTime: string;
-  endTime?: string;
-  maxMembers?: number;
-  coverImageUrl?: string;
-}): Promise<ClubEvent> {
-  const e = await api.post<ApiEvent>(`/api/v1/clubs/${clubId}/events`, payload);
-  return mapEvent(e);
-}
-
-export async function updateEvent(eventId: string, payload: {
+interface EventWritePayload {
   title?: string;
   description?: string;
   format?: "IN_PERSON" | "ONLINE" | "HYBRID";
@@ -89,7 +106,17 @@ export async function updateEvent(eventId: string, payload: {
   endTime?: string;
   maxMembers?: number;
   coverImageUrl?: string;
+  questions?: QuestionInput[];
+}
+
+export async function createEvent(clubId: string, payload: EventWritePayload & {
+  title: string; format: "IN_PERSON" | "ONLINE" | "HYBRID"; startTime: string;
 }): Promise<ClubEvent> {
+  const e = await api.post<ApiEvent>(`/api/v1/clubs/${clubId}/events`, payload);
+  return mapEvent(e);
+}
+
+export async function updateEvent(eventId: string, payload: EventWritePayload): Promise<ClubEvent> {
   const e = await api.patch<ApiEvent>(`/api/v1/events/${eventId}`, payload);
   return mapEvent(e);
 }
@@ -103,9 +130,28 @@ export interface EventAttendee {
   username: string;
   displayName: string;
   profilePictureUrl: string | null;
+  attended: boolean;
   respondedAt: string;
 }
 
 export async function getEventAttendees(eventId: string): Promise<EventAttendee[]> {
   return api.get<EventAttendee[]>(`/api/v1/events/${eventId}/rsvps`);
+}
+
+export interface EventResponse {
+  userId: string;
+  username: string;
+  displayName: string;
+  profilePictureUrl: string | null;
+  status: RsvpStatus;
+  attended: boolean;
+  answers: { questionId: string; label: string; value: string }[];
+}
+
+export async function getEventResponses(eventId: string): Promise<EventResponse[]> {
+  return api.get<EventResponse[]>(`/api/v1/events/${eventId}/responses`);
+}
+
+export async function checkInAttendee(eventId: string, userId: string, attended: boolean): Promise<void> {
+  return api.post<void>(`/api/v1/events/${eventId}/attendees/${userId}/checkin`, { attended });
 }
