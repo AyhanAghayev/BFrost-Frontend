@@ -69,6 +69,13 @@ export async function logout(): Promise<void> {
   return api.post<void>("/api/v1/auth/logout");
 }
 
+export async function completeRegistration(payload: {
+  token: string;
+  password: string;
+}): Promise<AuthResponse> {
+  return api.post<AuthResponse>("/api/v1/auth/complete-registration", payload);
+}
+
 export async function getMe(): Promise<User> {
   const profile = await api.get<ApiUserProfile>("/api/v1/users/me");
   return mapUser(profile);
