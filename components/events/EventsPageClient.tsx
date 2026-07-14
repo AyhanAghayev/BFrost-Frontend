@@ -4,7 +4,8 @@ import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { ClubEvent, EventFormat } from "@/lib/types";
-import { getMyEventFeed, rsvpEvent } from "@/lib/api/events";
+import { getMyEventFeed, rsvpEvent, type RsvpStatus } from "@/lib/api/events";
+import RsvpFormModal from "./RsvpFormModal";
 import { defaultEventCoverStyle } from "@/lib/eventCover";
 
 const MONTH_NAMES = [
@@ -44,8 +45,6 @@ const FORMAT_META: Record<EventFormat, { label: string; cls: string }> = {
 type ViewMode = "list" | "calendar";
 type Filter = "all" | EventFormat;
 
-const PAGE_SIZE = 9;
-
 function buildCalendarDays(year: number, month: number): (number | null)[] {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -60,41 +59,51 @@ export default function EventsPageClient() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<ViewMode>("list");
   const [filter, setFilter] = useState<Filter>("all");
-  const [attending, setAttending] = useState<Record<string, boolean>>({});
-  const [page, setPage] = useState(1);
+  const [statuses, setStatuses] = useState<Record<string, RsvpStatus | null>>({});
+  const [formEvent, setFormEvent] = useState<ClubEvent | null>(null);
 
   useEffect(() => {
     getMyEventFeed()
       .then((data) => {
-        const sorted = [...data].sort(
-          (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
-        );
-        setEvents(sorted);
-        setAttending(Object.fromEntries(sorted.map((e) => [e.id, e.isAttending])));
+        setEvents(data);
+        setStatuses(Object.fromEntries(data.map((e) => [e.id, e.myRsvpStatus])));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    setPage(1);
-  }, [filter]);
-
   const todayDate = useMemo(() => new Date(), []);
   const [calYear, setCalYear] = useState(todayDate.getFullYear());
   const [calMonth, setCalMonth] = useState(todayDate.getMonth());
 
-  async function toggleRsvp(id: string) {
-    const wasAttending = !!attending[id];
-    setAttending((p) => ({ ...p, [id]: !wasAttending }));
+  function statusOf(id: string): RsvpStatus | null {
+    return statuses[id] ?? null;
+  }
+
+  async function toggleRsvp(e: ClubEvent) {
+    const cur = statusOf(e.id);
+    if (cur === "ATTENDING" || cur === "WAITLISTED") {
+      setStatuses((p) => ({ ...p, [e.id]: "NOT_ATTENDING" }));
+      try {
+        await rsvpEvent(e.id, "NOT_ATTENDING");
+      } catch {
+        setStatuses((p) => ({ ...p, [e.id]: cur }));
+      }
+      return;
+    }
+    if (e.questions.length > 0) { setFormEvent(e); return; }
+    setStatuses((p) => ({ ...p, [e.id]: "ATTENDING" }));
     try {
-      await rsvpEvent(id, wasAttending ? "NOT_ATTENDING" : "ATTENDING");
+      const status = await rsvpEvent(e.id, "ATTENDING");
+      setStatuses((p) => ({ ...p, [e.id]: status }));
     } catch {
-      setAttending((p) => ({ ...p, [id]: wasAttending }));
+      setStatuses((p) => ({ ...p, [e.id]: cur }));
     }
   }
   function effectiveCount(e: ClubEvent) {
-    return e.attendeeCount + (attending[e.id] ? 1 : 0) - (e.isAttending ? 1 : 0);
+    const now = statusOf(e.id) === "ATTENDING" ? 1 : 0;
+    const before = e.myRsvpStatus === "ATTENDING" ? 1 : 0;
+    return e.attendeeCount + now - before;
   }
   function prevMonth() {
     if (calMonth === 0) { setCalMonth(11); setCalYear((y) => y - 1); }
@@ -130,9 +139,7 @@ export default function EventsPageClient() {
 
   const [featured, ...rest] = events;
   const filteredRest = rest.filter((e) => filter === "all" || e.format === filter);
-  const myRsvps = events.filter((e) => attending[e.id]);
-  const totalPages = Math.max(1, Math.ceil(filteredRest.length / PAGE_SIZE));
-  const pagedRest = filteredRest.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const myRsvps = events.filter((e) => statusOf(e.id) === "ATTENDING" || statusOf(e.id) === "WAITLISTED");
 
   if (loading) {
     return (
@@ -142,10 +149,21 @@ export default function EventsPageClient() {
           <p className="text-body-sm">Loading events…</p>
         </div>
       </div>
-    );}
+    );
+  }
 
   return (
     <div className="flex-1 min-w-0 flex gap-gutter px-margin-mobile md:px-gutter py-gutter">
+      {formEvent && (
+        <RsvpFormModal
+          event={formEvent}
+          onClose={() => setFormEvent(null)}
+          onDone={(status) => {
+            setStatuses((p) => ({ ...p, [formEvent.id]: status }));
+            setFormEvent(null);
+          }}
+        />
+      )}
       <div className="flex-1 min-w-0 flex flex-col gap-stack-lg">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-gutter">
           <div>
@@ -172,7 +190,227 @@ export default function EventsPageClient() {
           </div>
         </div>
 
-        {view !== "list" ? (
+        {view === "list" ? (
+          <>
+            {featured && (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+                <div className="md:col-span-7 relative rounded-xl overflow-hidden group h-[380px] border border-border-subtle">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10 z-10" />
+                  {featured.coverImageUrl ? (
+                    <img
+                      src={featured.coverImageUrl}
+                      alt={featured.title}
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="absolute inset-0" style={defaultEventCoverStyle(featured.id)} />
+                  )}
+
+                  <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-[#001b3d] font-bold text-center shadow-sm">
+                    <div className="text-[10px] uppercase tracking-wider leading-none">
+                      {fmtMonth3(featured.startsAt)}
+                    </div>
+                    <div className="text-xl leading-snug">{fmtDayNum(featured.startsAt)}</div>
+                  </div>
+
+                  {isToday(featured.startsAt) && (
+                    <div className="absolute top-4 right-4 z-20">
+                      <span className="bg-white text-primary px-3 py-1 rounded-full font-label-sm text-label-sm shadow-sm">
+                        Happening today
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="absolute bottom-0 left-0 p-gutter z-20 text-white max-w-xl [text-shadow:0_1px_4px_rgba(0,0,0,0.55)]">
+                    <div className="flex items-center gap-2 mb-stack-sm">
+                      <span
+                        className={cn(
+                          "px-3 py-1 rounded-full font-label-sm text-label-sm [text-shadow:none]",
+                          FORMAT_META[featured.format].cls
+                        )}
+                      >
+                        {FORMAT_META[featured.format].label}
+                      </span>
+                      <span className="bg-white/90 backdrop-blur-sm text-[#001b3d] font-label-sm text-label-sm font-medium px-2.5 py-1 rounded-full [text-shadow:none]">
+                        {featured.clubName}
+                      </span>
+                    </div>
+                    <h2 className="font-headline-lg text-headline-lg mb-stack-sm">
+                      {featured.title}
+                    </h2>
+                    <p className="text-body-sm text-white/80 mb-stack-md line-clamp-2">
+                      {featured.description}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-stack-lg gap-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-white/70 text-[18px]">
+                          schedule
+                        </span>
+                        <span className="font-label-md text-label-md">
+                          {fmtTime(featured.startsAt)} – {fmtTime(featured.endsAt)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-white/70 text-[18px]">
+                          location_on
+                        </span>
+                        <span className="font-label-md text-label-md">{featured.location}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="md:col-span-5 bg-white border border-border-subtle rounded-xl p-gutter flex flex-col gap-stack-lg">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-stack-sm">
+                      Your RSVP
+                    </p>
+                    <h3 className="font-headline-md text-headline-md text-primary leading-tight">
+                      {featured.title}
+                    </h3>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold",
+                          FORMAT_META[featured.format].cls
+                        )}
+                      >
+                        <span className="material-symbols-outlined text-[15px]">
+                          {featured.format === "online"
+                            ? "videocam"
+                            : featured.format === "hybrid"
+                            ? "sensors"
+                            : "location_on"}
+                        </span>
+                        {FORMAT_META[featured.format].label}
+                      </span>
+                      <span className="text-body-sm text-on-surface-variant">
+                        {featured.clubName}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-3 text-on-surface-variant text-body-sm">
+                      <span className="material-symbols-outlined text-[18px] flex-shrink-0 mt-0.5">
+                        schedule
+                      </span>
+                      <span>
+                        {fmtTime(featured.startsAt)} – {fmtTime(featured.endsAt)}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-3 text-on-surface-variant text-body-sm">
+                      <span className="material-symbols-outlined text-[18px] flex-shrink-0 mt-0.5">
+                        pin_drop
+                      </span>
+                      <span>{featured.location}</span>
+                    </div>
+                  </div>
+                  <div className="bg-surface-faint border border-border-subtle rounded-xl p-stack-md">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-body-sm text-on-surface-variant">Attending</span>
+                      <span className="font-label-md text-label-md text-primary">
+                        {effectiveCount(featured)} going
+                      </span>
+                    </div>
+                    <div className="w-full bg-surface-variant h-2 rounded-full overflow-hidden">
+                      <div
+                        className="bg-action-blue h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.round(
+                              (effectiveCount(featured) /
+                                Math.ceil(featured.attendeeCount * 1.5)) *
+                                100
+                            )
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-stack-sm mt-auto">
+                    <button
+                      onClick={() => toggleRsvp(featured)}
+                      className={cn(
+                        "w-full py-3.5 rounded-xl font-label-md text-label-md transition-all flex items-center justify-center gap-2",
+                        statusOf(featured.id) === "ATTENDING"
+                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                          : statusOf(featured.id) === "WAITLISTED"
+                          ? "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                          : "bg-primary text-white hover:opacity-90"
+                      )}
+                    >
+                      <span
+                        className="material-symbols-outlined text-[18px]"
+                        style={
+                          statusOf(featured.id) === "ATTENDING"
+                            ? { fontVariationSettings: "'FILL' 1" }
+                            : undefined
+                        }
+                      >
+                        {statusOf(featured.id) === "ATTENDING" ? "check_circle" : statusOf(featured.id) === "WAITLISTED" ? "hourglass_top" : "calendar_add_on"}
+                      </span>
+                      {statusOf(featured.id) === "ATTENDING" ? "Going" : statusOf(featured.id) === "WAITLISTED" ? "On waitlist" : "Mark as going"}
+                    </button>
+                    <Link
+                      href={`/clubs/${featured.clubSlug}/events/${featured.id}`}
+                      className="w-full py-3 border border-border-subtle text-on-surface-variant rounded-xl font-label-md text-label-md hover:bg-surface-container transition-colors text-center"
+                    >
+                      View details
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-stack-sm flex-wrap">
+              {(
+                [
+                  { val: "all", label: "All" },
+                  { val: "in-person", label: "In person" },
+                  { val: "online", label: "Online" },
+                  { val: "hybrid", label: "Hybrid" },
+                ] as { val: Filter; label: string }[]
+              ).map(({ val, label }) => (
+                <button
+                  key={val}
+                  onClick={() => setFilter(val)}
+                  className={cn(
+                    "px-4 py-2 rounded-full font-label-md text-label-md border transition-all",
+                    filter === val
+                      ? "bg-primary text-white border-primary"
+                      : "bg-white text-on-surface-variant border-border-subtle hover:border-primary hover:text-primary"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+              <span className="text-body-sm text-on-surface-variant ml-auto">
+                {filteredRest.length} event{filteredRest.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-gutter pb-gutter">
+              {filteredRest.map((event) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  status={statusOf(event.id)}
+                  count={effectiveCount(event)}
+                  onToggle={() => toggleRsvp(event)}
+                />
+              ))}
+              {filteredRest.length === 0 && (
+                <div className="col-span-full py-16 flex flex-col items-center text-center gap-3">
+                  <span className="material-symbols-outlined text-on-surface-variant text-[40px] opacity-30">
+                    event_busy
+                  </span>
+                  <p className="text-on-surface-variant text-body-sm">
+                    No {filter === "all" ? "" : filter + " "}events right now.
+                  </p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
           <CalendarView
             days={days}
             calEventMap={calEventMap}
@@ -180,244 +418,8 @@ export default function EventsPageClient() {
             calMonth={calMonth}
             onPrev={prevMonth}
             onNext={nextMonth}
-            attending={attending}
+            statuses={statuses}
           />
-        ) : (
-        <>
-        {featured && (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter">
-            <div className="md:col-span-7 relative rounded-xl overflow-hidden group h-[380px] border border-border-subtle">
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10 z-10" />
-              {featured.coverImageUrl ? (
-                <img
-                  src={featured.coverImageUrl}
-                  alt={featured.title}
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                />
-              ) : (
-                <div className="absolute inset-0" style={defaultEventCoverStyle(featured.id)} />
-              )}
-              <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-[#001b3d] font-bold text-center shadow-sm">
-                <div className="text-[10px] uppercase tracking-wider leading-none">
-                  {fmtMonth3(featured.startsAt)}
-                </div>
-                <div className="text-xl leading-snug">{fmtDayNum(featured.startsAt)}</div>
-              </div>
-              {isToday(featured.startsAt) && (
-                <div className="absolute top-4 right-4 z-20">
-                  <span className="bg-white text-primary px-3 py-1 rounded-full font-label-sm text-label-sm shadow-sm">
-                    Happening today
-                  </span>
-                </div>
-              )}
-              <div className="absolute bottom-0 left-0 p-gutter z-20 text-white max-w-xl [text-shadow:0_1px_4px_rgba(0,0,0,0.55)]">
-                <div className="flex items-center gap-2 mb-stack-sm">
-                  <span
-                    className={cn(
-                      "px-3 py-1 rounded-full font-label-sm text-label-sm [text-shadow:none]",
-                      FORMAT_META[featured.format].cls
-                    )}
-                  >
-                    {FORMAT_META[featured.format].label}
-                  </span>
-                  <span className="bg-white/90 backdrop-blur-sm text-[#001b3d] font-label-sm text-label-sm font-medium px-2.5 py-1 rounded-full [text-shadow:none]">
-                    {featured.clubName}
-                  </span>
-                </div>
-                <h2 className="font-headline-lg text-headline-lg mb-stack-sm">
-                  {featured.title}
-                </h2>
-                <p className="text-body-sm text-white/80 mb-stack-md line-clamp-2">
-                  {featured.description}
-                </p>
-                <div className="flex flex-wrap items-center gap-x-stack-lg gap-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-white/70 text-[18px]">
-                      schedule
-                    </span>
-                    <span className="font-label-md text-label-md">
-                      {fmtTime(featured.startsAt)} – {fmtTime(featured.endsAt)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-white/70 text-[18px]">
-                      location_on
-                    </span>
-                    <span className="font-label-md text-label-md">{featured.location}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="md:col-span-5 bg-white border border-border-subtle rounded-xl p-gutter flex flex-col gap-stack-lg">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-stack-sm">
-                  Your RSVP
-                </p>
-                <h3 className="font-headline-md text-headline-md text-primary leading-tight">
-                  {featured.title}
-                </h3>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold",
-                      FORMAT_META[featured.format].cls
-                    )}>
-                    <span className="material-symbols-outlined text-[15px]">
-                      {featured.format === "online"
-                        ? "videocam"
-                        : featured.format === "hybrid"
-                        ? "sensors"
-                        : "location_on"}
-                    </span>
-                    {FORMAT_META[featured.format].label}
-                  </span>
-                  <span className="text-body-sm text-on-surface-variant">
-                    {featured.clubName}
-                  </span>
-                </div>
-                <div className="flex items-start gap-3 text-on-surface-variant text-body-sm">
-                  <span className="material-symbols-outlined text-[18px] flex-shrink-0 mt-0.5">
-                    schedule
-                  </span>
-                  <span>
-                    {fmtTime(featured.startsAt)} – {fmtTime(featured.endsAt)}
-                  </span>
-                </div>
-                <div className="flex items-start gap-3 text-on-surface-variant text-body-sm">
-                  <span className="material-symbols-outlined text-[18px] flex-shrink-0 mt-0.5">
-                    pin_drop
-                  </span>
-                  <span>{featured.location}</span>
-                </div>
-              </div>
-              <div className="bg-surface-faint border border-border-subtle rounded-xl p-stack-md">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-body-sm text-on-surface-variant">Attending</span>
-                  <span className="font-label-md text-label-md text-primary">
-                    {effectiveCount(featured)} going
-                  </span>
-                </div>
-                <div className="w-full bg-surface-variant h-2 rounded-full overflow-hidden">
-                  <div
-                    className="bg-action-blue h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        Math.round(
-                          (effectiveCount(featured) / Math.ceil(featured.attendeeCount * 1.5)) * 100
-                        )
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col gap-stack-sm mt-auto">
-                <button
-                  onClick={() => toggleRsvp(featured.id)}
-                  className={cn(
-                    "w-full py-3.5 rounded-xl font-label-md text-label-md transition-all flex items-center justify-center gap-2",
-                    attending[featured.id]
-                      ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                      : "bg-primary text-white hover:opacity-90"
-                  )}>
-                  <span
-                    className="material-symbols-outlined text-[18px]"
-                    style={attending[featured.id] ? { fontVariationSettings: "'FILL' 1" } : undefined}>
-                    {attending[featured.id] ? "check_circle" : "calendar_add_on"}
-                  </span>
-                  {attending[featured.id] ? "Going" : "Mark as going"}
-                </button>
-                <Link
-                  href={`/clubs/${featured.clubSlug}/events/${featured.id}`}
-                  className="w-full py-3 border border-border-subtle text-on-surface-variant rounded-xl font-label-md text-label-md hover:bg-surface-container transition-colors text-center">
-                  View details
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
-        <div className="flex items-center gap-stack-sm flex-wrap">
-          {(
-            [
-              { val: "all", label: "All" },
-              { val: "in-person", label: "In person" },
-              { val: "online", label: "Online" },
-              { val: "hybrid", label: "Hybrid" },
-            ] as { val: Filter; label: string }[]
-          ).map(({ val, label }) => (
-            <button
-              key={val}
-              onClick={() => setFilter(val)}
-              className={cn(
-                "px-4 py-2 rounded-full font-label-md text-label-md border transition-all",
-                filter === val
-                  ? "bg-primary text-white border-primary"
-                  : "bg-white text-on-surface-variant border-border-subtle hover:border-primary hover:text-primary"
-              )}>
-              {label}
-            </button>
-          ))}
-          <span className="text-body-sm text-on-surface-variant ml-auto">
-            {filteredRest.length} event{filteredRest.length !== 1 ? "s" : ""}
-          </span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-gutter">
-          {pagedRest.map((event) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              attending={attending[event.id]}
-              count={effectiveCount(event)}
-              onToggle={() => toggleRsvp(event.id)}
-            />
-          ))}
-          {filteredRest.length === 0 && (
-            <div className="col-span-full py-16 flex flex-col items-center text-center gap-3">
-              <span className="material-symbols-outlined text-on-surface-variant text-[40px] opacity-30">
-                event_busy
-              </span>
-              <p className="text-on-surface-variant text-body-sm">
-                No {filter === "all" ? "" : filter + " "}events right now.
-              </p>
-            </div>
-          )}
-        </div>
-        {filteredRest.length > PAGE_SIZE && (
-          <div className="flex items-center justify-center gap-2 pb-gutter">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="p-2 rounded-lg border border-border-subtle text-on-surface-variant disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container transition-colors"
-            >
-              <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPage(p)}
-                className={cn(
-                  "w-9 h-9 rounded-lg font-label-md text-label-md text-sm transition-colors",
-                  p === page
-                    ? "bg-primary text-white"
-                    : "text-on-surface-variant hover:bg-surface-container"
-                )}
-              >
-                {p}
-              </button>
-            ))}
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="p-2 rounded-lg border border-border-subtle text-on-surface-variant disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container transition-colors"
-            >
-              <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-            </button>
-          </div>
-        )}
-        </>
         )}
       </div>
       <aside className="hidden xl:flex flex-col gap-gutter w-72 shrink-0">
@@ -468,20 +470,23 @@ export default function EventsPageClient() {
         />
       </aside>
     </div>
-  );}
+  );
+}
 
 function EventCard({
   event,
-  attending,
+  status,
   count,
   onToggle,
 }: {
   event: ClubEvent;
-  attending: boolean;
+  status: RsvpStatus | null;
   count: number;
   onToggle: () => void;
 }) {
   const fmt = FORMAT_META[event.format];
+  const attending = status === "ATTENDING";
+  const waitlisted = status === "WAITLISTED";
   return (
     <div className="bg-white border border-border-subtle rounded-xl overflow-hidden hover:shadow-md transition-shadow flex flex-col">
       <div className="h-44 relative overflow-hidden group">
@@ -546,10 +551,12 @@ function EventCard({
               "px-4 py-2 rounded-lg font-label-md text-label-md text-sm transition-all",
               attending
                 ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-red-50 hover:text-error hover:border-red-200"
+                : waitlisted
+                ? "bg-amber-50 text-amber-700 border border-amber-200"
                 : "bg-primary text-white hover:opacity-90"
             )}
           >
-            {attending ? "Going" : "RSVP"}
+            {attending ? "Going" : waitlisted ? "Waitlist" : "RSVP"}
           </button>
         </div>
       </div>
@@ -582,10 +589,16 @@ function MiniCalendar({
           {MONTH_NAMES[calMonth]} {calYear}
         </h5>
         <div className="flex gap-1">
-          <button onClick={onPrev} className="p-1 rounded hover:bg-surface-container transition-colors">
+          <button
+            onClick={onPrev}
+            className="p-1 rounded hover:bg-surface-container transition-colors"
+          >
             <span className="material-symbols-outlined text-outline text-[20px]">chevron_left</span>
           </button>
-          <button onClick={onNext} className="p-1 rounded hover:bg-surface-container transition-colors">
+          <button
+            onClick={onNext}
+            className="p-1 rounded hover:bg-surface-container transition-colors"
+          >
             <span className="material-symbols-outlined text-outline text-[20px]">chevron_right</span>
           </button>
         </div>
@@ -593,7 +606,10 @@ function MiniCalendar({
 
       <div className="grid grid-cols-7 gap-0.5 text-center mb-1">
         {DAY_LABELS.map((d, i) => (
-          <div key={i} className="text-[10px] text-on-surface-variant font-bold uppercase py-1">
+          <div
+            key={i}
+            className="text-[10px] text-on-surface-variant font-bold uppercase py-1"
+          >
             {d}
           </div>
         ))}
@@ -612,7 +628,9 @@ function MiniCalendar({
               key={i}
               className={cn(
                 "relative flex flex-col items-center py-1.5 rounded-lg cursor-pointer transition-colors text-sm",
-                today ? "bg-primary text-white font-bold" : "hover:bg-surface-container text-on-surface"
+                today
+                  ? "bg-primary text-white font-bold"
+                  : "hover:bg-surface-container text-on-surface"
               )}
             >
               {d}
@@ -639,7 +657,7 @@ function CalendarView({
   calMonth,
   onPrev,
   onNext,
-  attending,
+  statuses,
 }: {
   days: (number | null)[];
   calEventMap: Record<number, ClubEvent[]>;
@@ -647,7 +665,7 @@ function CalendarView({
   calMonth: number;
   onPrev: () => void;
   onNext: () => void;
-  attending: Record<string, boolean>;
+  statuses: Record<string, RsvpStatus | null>;
 }) {
   const todayRef = new Date();
   const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -659,10 +677,16 @@ function CalendarView({
           {MONTH_NAMES[calMonth]} {calYear}
         </h2>
         <div className="flex gap-2">
-          <button onClick={onPrev} className="p-2 rounded-lg hover:bg-surface-container transition-colors">
+          <button
+            onClick={onPrev}
+            className="p-2 rounded-lg hover:bg-surface-container transition-colors"
+          >
             <span className="material-symbols-outlined text-on-surface-variant">chevron_left</span>
           </button>
-          <button onClick={onNext} className="p-2 rounded-lg hover:bg-surface-container transition-colors">
+          <button
+            onClick={onNext}
+            className="p-2 rounded-lg hover:bg-surface-container transition-colors"
+          >
             <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
           </button>
         </div>
@@ -712,7 +736,9 @@ function CalendarView({
                         key={e.id}
                         className={cn(
                           "px-1.5 py-0.5 rounded text-[11px] font-semibold truncate",
-                          attending[e.id] ? "bg-emerald-100 text-emerald-800" : "bg-primary/10 text-primary"
+                          statuses[e.id] === "ATTENDING"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-primary/10 text-primary"
                         )}
                         title={e.title}
                       >

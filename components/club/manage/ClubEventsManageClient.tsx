@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { defaultEventCoverStyle } from "@/lib/eventCover";
-import type { Club, ClubEvent, EventFormat } from "@/lib/types";
+import type { Club, ClubEvent, EventFormat, QuestionType } from "@/lib/types";
 import { getClub } from "@/lib/api/clubs";
 import { uploadImage } from "@/lib/api/upload";
 import {
@@ -12,8 +12,10 @@ import {
   createEvent,
   updateEvent,
   deleteEvent,
-  getEventAttendees,
-  type EventAttendee,
+  getEventResponses,
+  checkInAttendee,
+  type EventResponse,
+  type QuestionInput,
 } from "@/lib/api/events";
 import { useAuthStore } from "@/lib/stores/auth.store";
 
@@ -102,6 +104,13 @@ const FORMAT_META: Record<EventFormat, { label: string; cls: string; icon: strin
 
 // ── CreateEventModal ──────────────────────────────────────────────────────────
 
+interface QuestionDraft {
+  label: string;
+  type: QuestionType;
+  required: boolean;
+  options: string[];
+}
+
 interface CreateForm {
   title: string;
   format: EventFormat;
@@ -111,6 +120,7 @@ interface CreateForm {
   capacity: string;
   description: string;
   coverImageUrl: string;
+  questions: QuestionDraft[];
 }
 
 const emptyForm = (): CreateForm => ({
@@ -122,7 +132,18 @@ const emptyForm = (): CreateForm => ({
   capacity: "",
   description: "",
   coverImageUrl: "",
+  questions: [],
 });
+
+const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
+  { value: "SHORT_TEXT", label: "Short text" },
+  { value: "LONG_TEXT", label: "Paragraph" },
+  { value: "SINGLE_CHOICE", label: "Single choice" },
+  { value: "MULTI_CHOICE", label: "Multiple choice" },
+  { value: "YES_NO", label: "Yes / No" },
+];
+
+const isChoice = (t: QuestionType) => t === "SINGLE_CHOICE" || t === "MULTI_CHOICE";
 
 const inputCls =
   "w-full bg-surface-faint border border-border-subtle rounded-xl px-4 py-2.5 text-body-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-action-blue placeholder:text-on-surface-variant/60";
@@ -137,6 +158,9 @@ function eventToForm(e: ClubEvent): CreateForm {
     capacity: e.maxMembers != null ? String(e.maxMembers) : "",
     description: e.description,
     coverImageUrl: e.coverImageUrl ?? "",
+    questions: e.questions.map((q) => ({
+      label: q.label, type: q.type, required: q.required, options: [...q.options],
+    })),
   };
 }
 
@@ -192,6 +216,28 @@ function CreateEventModal({
     setError("");
   }
 
+  function addQuestion() {
+    setForm((f) => ({ ...f, questions: [...f.questions, { label: "", type: "SHORT_TEXT", required: false, options: [] }] }));
+  }
+  function updateQuestion(i: number, patch: Partial<QuestionDraft>) {
+    setForm((f) => ({ ...f, questions: f.questions.map((q, idx) => (idx === i ? { ...q, ...patch } : q)) }));
+  }
+  function removeQuestion(i: number) {
+    setForm((f) => ({ ...f, questions: f.questions.filter((_, idx) => idx !== i) }));
+  }
+  function setOption(qi: number, oi: number, value: string) {
+    setForm((f) => ({ ...f, questions: f.questions.map((q, idx) =>
+      idx === qi ? { ...q, options: q.options.map((o, j) => (j === oi ? value : o)) } : q) }));
+  }
+  function addOption(qi: number) {
+    setForm((f) => ({ ...f, questions: f.questions.map((q, idx) =>
+      idx === qi ? { ...q, options: [...q.options, ""] } : q) }));
+  }
+  function removeOption(qi: number, oi: number) {
+    setForm((f) => ({ ...f, questions: f.questions.map((q, idx) =>
+      idx === qi ? { ...q, options: q.options.filter((_, j) => j !== oi) } : q) }));
+  }
+
   const FORMAT_API = {
     "in-person": "IN_PERSON",
     online: "ONLINE",
@@ -222,6 +268,15 @@ function CreateEventModal({
     setSubmitting(true);
     setError("");
     try {
+      // Drop blank questions; keep only real options for choice types.
+      const questions: QuestionInput[] = form.questions
+        .filter((q) => q.label.trim())
+        .map((q) => ({
+          label: q.label.trim(),
+          type: q.type,
+          required: q.required,
+          options: isChoice(q.type) ? q.options.map((o) => o.trim()).filter(Boolean) : [],
+        }));
       const payload = {
         title: form.title.trim(),
         description: form.description.trim() || undefined,
@@ -231,6 +286,7 @@ function CreateEventModal({
         endTime: new Date(form.endsAt).toISOString(),
         maxMembers: cap ? Number(cap) : undefined,
         coverImageUrl: form.coverImageUrl || undefined,
+        questions,
       };
       if (isEdit) {
         const saved = await updateEvent(event.id, payload);
@@ -430,6 +486,94 @@ function CreateEventModal({
             />
           </div>
 
+          <div className="flex flex-col gap-2 border-t border-border-subtle pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-label-md text-label-md text-on-surface">Registration form</p>
+                <p className="text-[12px] text-on-surface-variant">
+                  Questions attendees answer when they RSVP. Leave empty for one-click RSVP.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addQuestion}
+                className="flex-shrink-0 inline-flex items-center gap-1 text-action-blue text-sm font-label-md hover:underline"
+              >
+                <span className="material-symbols-outlined text-[18px]">add</span>
+                Add question
+              </button>
+            </div>
+
+            {form.questions.map((q, qi) => (
+              <div key={qi} className="rounded-xl border border-border-subtle p-3 flex flex-col gap-2 bg-surface-faint/50">
+                <div className="flex items-start gap-2">
+                  <input
+                    className={inputCls}
+                    placeholder={`Question ${qi + 1}`}
+                    value={q.label}
+                    onChange={(e) => updateQuestion(qi, { label: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeQuestion(qi)}
+                    title="Remove question"
+                    className="flex-shrink-0 p-2.5 text-error hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <select
+                    className="bg-surface-faint border border-border-subtle rounded-lg px-3 py-1.5 text-sm"
+                    value={q.type}
+                    onChange={(e) => updateQuestion(qi, { type: e.target.value as QuestionType })}
+                  >
+                    {QUESTION_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                  <label className="flex items-center gap-1.5 text-sm text-on-surface-variant">
+                    <input
+                      type="checkbox"
+                      checked={q.required}
+                      onChange={(e) => updateQuestion(qi, { required: e.target.checked })}
+                    />
+                    Required
+                  </label>
+                </div>
+                {isChoice(q.type) && (
+                  <div className="flex flex-col gap-1.5 pl-1">
+                    {q.options.map((opt, oi) => (
+                      <div key={oi} className="flex items-center gap-2">
+                        <span className="text-on-surface-variant text-sm">•</span>
+                        <input
+                          className="flex-1 bg-white border border-border-subtle rounded-lg px-3 py-1.5 text-sm"
+                          placeholder={`Option ${oi + 1}`}
+                          value={opt}
+                          onChange={(e) => setOption(qi, oi, e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeOption(qi, oi)}
+                          className="material-symbols-outlined text-[18px] text-on-surface-variant hover:text-error"
+                        >
+                          close
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => addOption(qi)}
+                      className="self-start text-action-blue text-sm font-label-md hover:underline ml-4"
+                    >
+                      + Add option
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
           {error && (
             <p className="text-error text-body-sm flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[16px]">error</span>
@@ -468,7 +612,7 @@ function RSVPsModal({
   event: ClubEvent;
   onClose: () => void;
 }) {
-  const [attendees, setAttendees] = useState<EventAttendee[]>([]);
+  const [responses, setResponses] = useState<EventResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -479,71 +623,91 @@ function RSVPsModal({
   }, [onClose]);
 
   useEffect(() => {
-    getEventAttendees(event.id)
-      .then(setAttendees)
+    getEventResponses(event.id)
+      .then(setResponses)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, [event.id]);
 
+  async function toggleCheckIn(userId: string, attended: boolean) {
+    setResponses((prev) => prev.map((r) => (r.userId === userId ? { ...r, attended } : r)));
+    try {
+      await checkInAttendee(event.id, userId, attended);
+    } catch {
+      setResponses((prev) => prev.map((r) => (r.userId === userId ? { ...r, attended: !attended } : r)));
+    }
+  }
+
+  const going = responses.filter((r) => r.status === "ATTENDING");
+  const waitlisted = responses.filter((r) => r.status === "WAITLISTED");
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl border border-border-subtle w-full max-w-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-headline-md text-headline-md text-primary">RSVPs</h2>
+      <div className="relative bg-white rounded-2xl shadow-xl border border-border-subtle w-full max-w-lg max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
+          <div className="min-w-0">
+            <h2 className="font-headline-md text-headline-md text-primary truncate">Registrations</h2>
+            <p className="text-body-sm text-on-surface-variant">
+              {going.length} going{waitlisted.length > 0 ? ` · ${waitlisted.length} waitlisted` : ""}
+            </p>
+          </div>
           <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
-        <p className="text-body-sm mb-1 line-clamp-1 font-medium text-on-surface">
-          {event.title}
-        </p>
-        <p className="text-body-sm text-on-surface-variant mb-5">{fmtDateShort(event.startsAt)}</p>
 
-        <div className="flex items-end gap-2 mb-4">
-          <span className="text-4xl font-bold text-primary font-headline-md">
-            {loading ? "—" : attendees.length}
-          </span>
-          <span className="text-on-surface-variant text-body-sm mb-1">
-            attendee{attendees.length === 1 ? "" : "s"} confirmed
-          </span>
-        </div>
-
-        {loading ? (
-          <div className="py-8 flex justify-center">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : error ? (
-          <p className="text-error text-body-sm">{error}</p>
-        ) : attendees.length === 0 ? (
-          <p className="text-on-surface-variant text-body-sm py-4 text-center">
-            No RSVPs yet.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-1 max-h-72 overflow-y-auto -mx-2">
-            {attendees.map((a) => (
-              <Link
-                key={a.userId}
-                href={`/profile/${a.username}`}
-                className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-faint transition-colors"
-              >
-                <img
-                  src={a.profilePictureUrl ?? `https://api.dicebear.com/9.x/avataaars/svg?seed=${a.username}`}
-                  alt={a.displayName}
-                  className="w-9 h-9 rounded-full object-cover shrink-0"
-                />
-                <div className="min-w-0">
-                  <p className="font-label-md text-label-md text-on-surface truncate">
-                    {a.displayName}
-                  </p>
-                  <p className="text-body-sm text-on-surface-variant truncate">
-                    @{a.username}
-                  </p>
+        <div className="overflow-y-auto p-4">
+          {loading ? (
+            <div className="py-8 flex justify-center">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : error ? (
+            <p className="text-error text-body-sm">{error}</p>
+          ) : responses.length === 0 ? (
+            <p className="text-on-surface-variant text-body-sm py-6 text-center">No registrations yet.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {responses.map((r) => (
+                <div key={r.userId} className="rounded-xl border border-border-subtle p-3">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={r.profilePictureUrl ?? `https://api.dicebear.com/9.x/avataaars/svg?seed=${r.username}`}
+                      alt={r.displayName}
+                      className="w-9 h-9 rounded-full object-cover shrink-0"
+                    />
+                    <Link href={`/profile/${r.username}`} className="min-w-0 flex-1">
+                      <p className="font-label-md text-label-md text-on-surface truncate hover:underline">{r.displayName}</p>
+                      <p className="text-body-sm text-on-surface-variant truncate">@{r.username}</p>
+                    </Link>
+                    {r.status === "WAITLISTED" ? (
+                      <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded bg-amber-50 text-amber-700">Waitlist</span>
+                    ) : (
+                      <label className="flex items-center gap-1.5 text-sm text-on-surface-variant cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={r.attended}
+                          onChange={(e) => toggleCheckIn(r.userId, e.target.checked)}
+                        />
+                        Checked in
+                      </label>
+                    )}
+                  </div>
+                  {r.answers.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-border-subtle flex flex-col gap-1">
+                      {r.answers.map((a) => (
+                        <div key={a.questionId} className="text-sm">
+                          <span className="text-on-surface-variant">{a.label}: </span>
+                          <span className="text-on-surface">{a.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </Link>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

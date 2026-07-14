@@ -105,8 +105,23 @@ export interface ClubEvent {
   endsAt: string;
   maxMembers: number | null;
   attendeeCount: number;
+  waitlistCount: number;
   isAttending: boolean;
+  myRsvpStatus: "ATTENDING" | "NOT_ATTENDING" | "WAITLISTED" | null;
+  questions: EventQuestion[];
   organizerId: string;
+}
+
+export type QuestionType =
+  | "SHORT_TEXT" | "LONG_TEXT" | "SINGLE_CHOICE" | "MULTI_CHOICE" | "YES_NO";
+
+export interface EventQuestion {
+  id: string;
+  label: string;
+  type: QuestionType;
+  required: boolean;
+  position: number;
+  options: string[];
 }
 
 export interface WikiArticle {
