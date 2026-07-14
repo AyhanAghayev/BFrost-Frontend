@@ -133,3 +133,50 @@ group and requires authentication:
 | `/chat` | Direct messages |
 | `/settings` | Account settings |
 | `/admin` | Admin dashboard |
+
+## Installation
+
+Prerequisites:
+
+- Node.js 20 or later
+- A running instance of the [backend API](https://github.com/AyhanAghayev/BFrost-Backend)
+
+Steps:
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure environment variables
+# create .env.local in the project root:
+echo "NEXT_PUBLIC_API_URL=http://localhost:8080" > .env.local
+
+# 3. Build
+npm run build
+```
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `NEXT_PUBLIC_API_URL` | No | `http://localhost:8080` | Base URL of the backend API. Also used to derive the WebSocket URL (`ws(s)://<host>/ws-native`) for chat. |
+
+## Development
+
+Run the dev server:
+
+```bash
+npm run dev
+```
+
+The app is served at `http://localhost:3000`. The backend must be running
+and reachable at `NEXT_PUBLIC_API_URL` (default `http://localhost:8080`),
+with `OAUTH_SUCCESS_REDIRECT`/`OAUTH_FAILURE_REDIRECT` on the backend pointed
+back at this frontend if Google login is used.
+
+Run in production mode locally:
+
+```bash
+npm run build
+npm run start
+```
