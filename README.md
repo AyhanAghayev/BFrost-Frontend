@@ -38,3 +38,98 @@ repository is linked below.
 - react-markdown + remark-gfm (wiki article rendering)
 - three.js (landing page visuals)
 - lucide-react (icons)
+
+## Architecture Overview
+
+The app uses the Next.js App Router with two top-level route groups:
+
+```
+app
+├── (auth)/            Sign-in / sign-up — no navigation chrome, unauthenticated
+│   ├── sign-in/
+│   └── sign-up/
+├── (main)/             Authenticated app shell (top nav, side nav, mobile nav)
+│   ├── discover/       Club/user discovery
+│   ├── clubs/          Club list, detail, creation, settings, event management, wiki
+│   ├── events/         Upcoming events across joined clubs
+│   ├── wiki/           Cross-club wiki index
+│   ├── post/[postid]/  Single post detail
+│   ├── profile/[username]/  Public user profile
+│   ├── chat/           Direct messaging (STOMP/WebSocket)
+│   ├── search/         Global search
+│   ├── admin/          Admin dashboard
+│   └── settings/       Account settings
+│
+├── oauth/              Google OAuth2
+│   ├── callback/       
+│   └── complete-registration/  
+└── page.tsx            Public landing page
+```
+
+Key design points:
+
+- `(main)/layout.tsx` wraps every authenticated route in `AuthGuard`, which
+  redirects unauthenticated users before rendering the shell (`TopNavBar`,
+  `SideNavBar`, `MobileNav`).
+- All backend communication goes through a single fetch wrapper
+  (`lib/api/client.ts`). It attaches credentials for the httpOnly refresh
+  cookie, retries a request once after a transparent token refresh on a 401,
+  and otherwise throws a typed `ApiError`.
+- Auth state (access token, current user) is held in a Zustand store
+  (`lib/stores/auth.store.ts`), not in React context, so it's readable outside
+  components (e.g. the API client's 401 handler).
+- Domain API calls are grouped by resource under `lib/api/` (`clubs.ts`,
+  `posts.ts`, `events.ts`, `wiki.ts`, `conversations.ts`, `notifications.ts`,
+  `users.ts`, `admin.ts`, `upload.ts`, `trending.ts`), mirroring the backend's
+  package-by-domain structure.
+- Chat connects to the backend's STOMP endpoint directly from the browser
+  (`ws(s)://<api-host>/ws-native`), authenticated with the same JWT access
+  token used for REST calls, and falls back to polling when the socket is
+  disconnected.
+
+## Description
+
+The landing page (`/`) is public. Every other route lives under the `(main)`
+group and requires authentication:
+
+- Browse and search clubs, join public clubs or request to join private ones
+- View a home feed of posts (text, image, link, question, or poll) from
+  followed users and joined clubs; react to, comment on, save, or vote on them
+- Create and manage clubs: roles, join requests, member removal, ownership
+  transfer
+- Browse and RSVP to club events; moderators/owners can create, edit and
+  delete events
+- Read and edit per-club wiki articles
+- View and edit a user's public profile, follow/unfollow other users
+- Direct message mutual followers in real time
+- Receive notifications for follows, likes, comments and join requests (nav
+  dropdown)
+- Manage account settings (profile, password, email, notification
+  preferences)
+- Admin dashboard for platform-level moderation
+
+## Routes
+
+| Route | Description |
+|---|---|
+| `/` | Public landing page |
+| `/sign-in` | Sign in (email/password or Google OAuth2) |
+| `/sign-up` | Create an account |
+| `/discover` | Discover clubs and users |
+| `/search` | Global search |
+| `/clubs` | List clubs |
+| `/clubs/new` | Create a club |
+| `/clubs/[clubId]` | Club detail — feed, members, events, wiki |
+| `/clubs/[clubId]/settings` | Club settings (moderator/owner) |
+| `/clubs/[clubId]/manage/events` | Manage a club's events (moderator/owner) |
+| `/clubs/[clubId]/events/[eventId]` | Event detail and RSVP |
+| `/clubs/[clubId]/wiki/new` | Create a wiki article |
+| `/clubs/[clubId]/wiki/[articleId]` | Read a wiki article |
+| `/clubs/[clubId]/wiki/[articleId]/edit` | Edit a wiki article |
+| `/wiki` | Wiki articles across all clubs |
+| `/events` | Upcoming events across joined clubs |
+| `/post/[postid]` | Post detail |
+| `/profile/[username]` | Public user profile |
+| `/chat` | Direct messages |
+| `/settings` | Account settings |
+| `/admin` | Admin dashboard |
