@@ -52,6 +52,7 @@ export default function LandingPage() {
 
   return (
     <div className="flex flex-col min-h-screen" style={{ fontFamily: "var(--font-inter)" }}>
+      {/* ── Navbar ── */}
       <nav
         className="sticky top-0 z-50 flex items-center justify-between px-6 lg:px-12 h-16 border-b"
         style={{ backgroundColor: "#001B3D", borderColor: "rgba(255,255,255,0.08)" }}
@@ -89,10 +90,12 @@ export default function LandingPage() {
         </div>
       </nav>
 
+      {/* ── Hero ── */}
       <section
         className="relative flex items-center overflow-hidden"
         style={{ backgroundColor: "#001B3D", minHeight: "calc(100vh - 64px)" }}
       >
+        {/* Background glow orbs */}
         <div
           className="absolute top-0 left-0 w-[600px] h-[600px] rounded-full pointer-events-none"
           style={{
@@ -109,6 +112,7 @@ export default function LandingPage() {
         />
 
         <div className="relative z-10 w-full max-w-7xl mx-auto px-6 lg:px-12 py-16 md:py-20 flex flex-col md:flex-row items-center gap-10 md:gap-0">
+          {/* Left: content */}
           <div className="flex-1 flex flex-col gap-8 lg:pr-12">
             <div
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold self-start"
@@ -162,6 +166,7 @@ export default function LandingPage() {
               </Link>
             </div>
 
+            {/* Social proof */}
             <div className="flex items-center gap-4">
               <div className="flex -space-x-2.5">
                 {AVATARS.map((src, i) => (
@@ -184,6 +189,7 @@ export default function LandingPage() {
             </div>
           </div>
 
+          {/* Right: 3D globe */}
           <div className="hidden md:flex flex-1 items-center justify-center">
             <div className="relative w-full" style={{ maxWidth: 520, aspectRatio: "1 / 1" }}>
               <NetworkGlobe />
@@ -197,6 +203,7 @@ export default function LandingPage() {
           </div>
         </div>
 
+        {/* Scroll indicator */}
         <div
           className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce"
           style={{ color: "rgba(255,255,255,0.3)" }}
@@ -205,6 +212,7 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── How it works ── */}
       <section className="bg-white py-24 px-6 lg:px-12">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-14">
@@ -250,8 +258,7 @@ export default function LandingPage() {
             ].map(({ icon, title, body, color, bg }) => (
               <div
                 key={title}
-                className="flex flex-col gap-4 p-7 rounded-2xl border"
-                style={{ borderColor: "#E2E8F0" }}
+                className="flex flex-col gap-4 p-7 rounded-2xl border border-border-subtle"
               >
                 <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
@@ -268,7 +275,7 @@ export default function LandingPage() {
                   >
                     {title}
                   </h3>
-                  <p className="text-sm leading-relaxed" style={{ color: "#44474e" }}>
+                  <p className="text-sm leading-relaxed text-on-surface-variant">
                     {body}
                   </p>
                 </div>
@@ -278,7 +285,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-24 px-6 lg:px-12" style={{ backgroundColor: "#F8FAFC" }}>
+      <section className="bg-surface-faint py-24 px-6 lg:px-12">
         <div className="max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-12 gap-4">
             <div>
@@ -294,7 +301,7 @@ export default function LandingPage() {
               >
                 Something for every student.
               </h2>
-              <p className="mt-2 text-sm" style={{ color: "#44474e", maxWidth: 480 }}>
+              <p className="mt-2 text-sm text-on-surface-variant" style={{ maxWidth: 480 }}>
                 From robotics to volunteering, BFrost hosts every student organization — and more join each semester.
               </p>
             </div>
@@ -315,8 +322,7 @@ export default function LandingPage() {
                 <Link
                   key={club.id}
                   href={`/clubs/${club.slug}`}
-                  className="flex flex-col gap-4 p-6 rounded-xl bg-white border hover:shadow-md hover:-translate-y-0.5 transition-all"
-                  style={{ borderColor: "#E2E8F0" }}
+                  className="flex flex-col gap-4 p-6 rounded-xl bg-white border border-border-subtle hover:shadow-md hover:-translate-y-0.5 transition-all"
                 >
                   <div className="flex items-start justify-between">
                     <div
@@ -338,7 +344,7 @@ export default function LandingPage() {
                     <h3 className="font-bold text-primary text-sm mb-1" style={{ fontFamily: "var(--font-manrope)" }}>
                       {club.name}
                     </h3>
-                    <div className="flex items-center gap-4 text-xs" style={{ color: "#44474e" }}>
+                    <div className="flex items-center gap-4 text-xs text-on-surface-variant">
                       <span className="flex items-center gap-1">
                         <span className="material-symbols-outlined text-[14px]">group</span>
                         {club.memberCount.toLocaleString()} members
@@ -389,8 +395,7 @@ export default function LandingPage() {
               return (
                 <div
                   key={event.id}
-                  className="flex items-center gap-5 p-5 rounded-xl border bg-white hover:shadow-sm transition-all"
-                  style={{ borderColor: "#E2E8F0" }}
+                  className="flex items-center gap-5 p-5 rounded-xl border border-border-subtle bg-white hover:shadow-sm transition-all"
                 >
                   <div className="hidden sm:block shrink-0 rounded-xl overflow-hidden" style={{ width: 96, height: 64 }}>
                     <img
@@ -407,14 +412,14 @@ export default function LandingPage() {
                       >
                         {fmt.label}
                       </span>
-                      <span className="text-xs" style={{ color: "#44474e" }}>
+                      <span className="text-xs text-on-surface-variant">
                         {event.clubName}
                       </span>
                     </div>
                     <p className="font-semibold text-sm text-primary truncate" style={{ fontFamily: "var(--font-manrope)" }}>
                       {event.title}
                     </p>
-                    <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "#44474e" }}>
+                    <p className="text-xs mt-0.5 flex items-center gap-1 text-on-surface-variant">
                       <span className="material-symbols-outlined text-[13px]">schedule</span>
                       {formatEventDate(event.startsAt)}
                       {event.location && (
@@ -427,10 +432,10 @@ export default function LandingPage() {
                     </p>
                   </div>
                   <div className="shrink-0 text-right hidden md:block">
-                    <p className="text-xs font-semibold" style={{ color: "#001B3D" }}>
+                    <p className="text-xs font-semibold text-primary">
                       {event.attendeeCount}
                     </p>
-                    <p className="text-xs" style={{ color: "#44474e" }}>RSVPs</p>
+                    <p className="text-xs text-on-surface-variant">RSVPs</p>
                   </div>
                 </div>
               );
@@ -439,10 +444,12 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── CTA ── */}
       <section
         className="relative overflow-hidden py-28 px-6 lg:px-12"
         style={{ backgroundColor: "#001B3D" }}
       >
+        {/* Glow */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
