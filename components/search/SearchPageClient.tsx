@@ -6,7 +6,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { formatCount, formatRelativeTime } from "@/lib/utils/format";
 import { searchClubs } from "@/lib/api/clubs";
-import { searchUsers } from "@/lib/api/users";
+import { searchUsers, followUser, unfollowUser } from "@/lib/api/users";
 import type { Club, User, Post } from "@/lib/types";
 
 type Tab = "all" | "people" | "clubs" | "posts";
@@ -342,6 +342,22 @@ function ClubCard({ club }: { club: Club }) {
 
 function PersonRow({ user }: { user: User }) {
   const [following, setFollowing] = useState(user.isFollowing);
+  const [busy, setBusy] = useState(false);
+
+  async function toggleFollow() {
+    if (busy) return;
+    const wasFollowing = following;
+    setBusy(true);
+    setFollowing(!wasFollowing);
+    try {
+      if (wasFollowing) await unfollowUser(user.id);
+      else await followUser(user.id);
+    } catch {
+      setFollowing(wasFollowing); // revert on failure
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="flex items-center justify-between bg-white border border-border-subtle rounded-xl px-stack-md py-3">
@@ -371,9 +387,10 @@ function PersonRow({ user }: { user: User }) {
         </div>
       </Link>
       <button
-        onClick={() => setFollowing((p) => !p)}
+        onClick={toggleFollow}
+        disabled={busy}
         className={cn(
-          "px-4 py-1.5 rounded-lg text-label-sm font-semibold transition-colors flex-shrink-0",
+          "px-4 py-1.5 rounded-lg text-label-sm font-semibold transition-colors flex-shrink-0 disabled:opacity-60",
           following
             ? "bg-surface-container text-on-surface-variant border border-border-subtle"
             : "border-2 border-action-blue text-action-blue hover:bg-action-blue/5"
