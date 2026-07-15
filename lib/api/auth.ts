@@ -23,6 +23,7 @@ export interface ApiUserProfile {
   role: string;
   followerCount: number;
   followingCount: number;
+  clubCount: number;
   isFollowedByCurrentUser: boolean;
   createdAt: string;
 }
@@ -42,7 +43,7 @@ export function mapUser(u: ApiUserProfile): User {
     joinedAt: u.createdAt,
     followerCount: u.followerCount,
     followingCount: u.followingCount,
-    clubCount: 0,
+    clubCount: u.clubCount,
     isFollowing: u.isFollowedByCurrentUser,
     isVerified: u.verified,
     role: u.role,

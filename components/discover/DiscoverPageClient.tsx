@@ -128,25 +128,27 @@ function ClubCard({
 
   return (
     <div className="bg-white border border-border-subtle rounded-xl p-stack-md flex flex-col gap-3 hover:shadow-sm transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${catCls}`}>
-          <span className="material-symbols-outlined text-[28px]">{catIcon}</span>
+      <Link href={`/clubs/${club.slug}`} className="flex flex-col gap-3 group">
+        <div className="flex items-start justify-between">
+          <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${catCls}`}>
+            <span className="material-symbols-outlined text-[28px]">{catIcon}</span>
+          </div>
+          <span className="text-label-sm text-on-surface-variant">{club.category}</span>
         </div>
-        <span className="text-label-sm text-on-surface-variant">{club.category}</span>
-      </div>
 
-      <div>
-        <h4 className="font-label-md text-label-md text-on-surface mb-1">{club.name}</h4>
-        <p className="text-on-surface-variant text-body-sm line-clamp-2">{club.description}</p>
-      </div>
+        <div>
+          <h4 className="font-label-md text-label-md text-on-surface mb-1 group-hover:text-action-blue transition-colors">{club.name}</h4>
+          <p className="text-on-surface-variant text-body-sm line-clamp-2">{club.description}</p>
+        </div>
 
-      <div className="flex items-center gap-1 text-on-surface-variant text-body-sm">
-        <span className="material-symbols-outlined text-[15px]">group</span>
-        <span>{formatCount(club.memberCount)} members</span>
-        <span className="mx-1 opacity-40">·</span>
-        <span className="material-symbols-outlined text-[15px]">event</span>
-        <span>{club.eventCount} events</span>
-      </div>
+        <div className="flex items-center gap-1 text-on-surface-variant text-body-sm">
+          <span className="material-symbols-outlined text-[15px]">group</span>
+          <span>{formatCount(club.memberCount)} members</span>
+          <span className="mx-1 opacity-40">·</span>
+          <span className="material-symbols-outlined text-[15px]">event</span>
+          <span>{club.eventCount} events</span>
+        </div>
+      </Link>
 
       {isOwned ? (
         <Link

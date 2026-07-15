@@ -1,6 +1,10 @@
 import { useAuthStore } from "@/lib/stores/auth.store";
 
-export const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+// Default to same-origin ("") so the browser hits the frontend host and the
+// Next.js rewrite in next.config.ts proxies /api/* to the backend server-side.
+// This keeps the auth cookie first-party (required for mobile Safari/Chrome).
+// Only override with NEXT_PUBLIC_API_URL for direct-to-backend debugging.
+export const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export class ApiError extends Error {
   constructor(
@@ -16,6 +20,15 @@ function clearAuthAndRedirect() {
   useAuthStore.getState().clearAuth();
   window.location.href = "/sign-in";
 }
+
+// Auth endpoints must never trigger the session-refresh/redirect logic:
+// a 401 from these means "bad credentials"/"invalid token", not "expired session".
+const AUTH_PATHS = [
+  "/api/v1/auth/login",
+  "/api/v1/auth/register",
+  "/api/v1/auth/refresh",
+  "/api/v1/auth/complete-registration",
+];
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -45,7 +58,7 @@ async function request<T>(path: string, init?: RequestInit, _retried = false): P
     headers,
   });
 
-  if (res.status === 401 && !_retried && path !== "/api/v1/auth/refresh") {
+  if (res.status === 401 && !_retried && !AUTH_PATHS.includes(path)) {
     if (await tryRefresh()) {
       return request<T>(path, init, true);
     }

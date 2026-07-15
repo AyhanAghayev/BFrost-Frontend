@@ -24,6 +24,8 @@ repository is linked below.
 | Frontend repository | [link](https://github.com/AyhanAghayev/BFrost-Frontend) |
 | Backend repository | [link](https://github.com/AyhanAghayev/BFrost-Backend) |
 | Live application | [link](https://b-frost.vercel.app/) |
+| Project board (Kanban) | [link](https://b-frost-management-lilac.vercel.app/) |
+| Project design | [link](https://stitch.withgoogle.com/projects/3313855988926127545) |
 | Backend API documentation (Swagger UI) | `/swagger-ui.html` on the deployed backend |
 
 ## Technologies Used
